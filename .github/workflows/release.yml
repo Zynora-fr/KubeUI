@@ -24,6 +24,9 @@ jobs:
   release:
     name: Build and publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
 
@@ -36,9 +39,54 @@ jobs:
       - name: Build
         run: ./gradlew build --stacktrace
 
-      - name: Extract version from tag
+      # On a tag push, GITHUB_REF_NAME is the tag itself (e.g. "v0.1.0") - correct. On a manual
+      # "Run workflow" trigger though, GITHUB_REF_NAME is whatever *branch* was selected (usually
+      # "main"), which isn't a version at all - that's what produced "KubeUI main" as the release
+      # name before. Fall back to the real source of truth (gradle.properties) in that case.
+      - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            version=$(grep '^mod_version=' gradle.properties | cut -d'=' -f2)
+            echo "tag=v$version" >> "$GITHUB_OUTPUT"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Only on a real tag push: turns the running draft that release-drafter.yml has been keeping
+      # up to date since the last release (grouped by PR label, see .github/release-drafter.yml)
+      # into the actual published GitHub Release for this tag - no more hand-editing CHANGELOG.md
+      # before tagging. On a manual "Run workflow" re-run there's no new tag/PRs to draft from, so
+      # this is skipped and the changelog step below falls back to CHANGELOG.md instead.
+      - name: Publish the GitHub release from the drafted changelog
+        if: github.event_name == 'push'
+        id: drafted_release
+        uses: release-drafter/release-drafter@v7
+        with:
+          publish: true
+          tag: ${{ steps.version.outputs.tag }}
+          commitish: ${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve changelog text
+        id: changelog
+        env:
+          DRAFTED_BODY: ${{ steps.drafted_release.outputs.body }}
+          IS_TAG_PUSH: ${{ github.event_name == 'push' }}
+        run: |
+          if [ "$IS_TAG_PUSH" = "true" ]; then
+            body="$DRAFTED_BODY"
+          else
+            body=$(cat CHANGELOG.md)
+          fi
+          {
+            echo "text<<CHANGELOG_EOF"
+            echo "$body"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Decide targets
         id: targets
@@ -72,6 +120,7 @@ jobs:
           name: KubeUI ${{ steps.version.outputs.version }}
           version-type: release
           files: build/libs/!(*-@(dev|sources|javadoc)).jar
+          changelog: ${{ steps.changelog.outputs.text }}
           dependencies: |
             kubejs(required)
 
@@ -120,5 +169,6 @@ jobs:
           name: KubeUI ${{ steps.version.outputs.version }}
           version-type: release
           files: build/libs/!(*-@(dev|sources|javadoc)).jar
+          changelog: ${{ steps.changelog.outputs.text }}
           dependencies: |
             kubejs(required)
