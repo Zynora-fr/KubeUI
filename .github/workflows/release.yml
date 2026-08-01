@@ -28,10 +28,16 @@ jobs:
 
       # MODRINTH_TOKEN still needs to be added as a repo secret (Settings > Secrets and
       # variables > Actions > New repository secret) - never hardcode a token here.
+      #
+      # modrinth-id is the project's actual Modrinth id (not the "kubeui" slug) - using the slug
+      # here previously made mc-publish report success without actually creating a version
+      # (confirmed via `GET /v2/project/kubeui` showing an empty "versions" array right after a
+      # "successful" run). The real id is stable even if the slug ever changes.
       - name: Publish to Modrinth
+        id: modrinth
         uses: Kira-NT/mc-publish@v3
         with:
-          modrinth-id: kubeui
+          modrinth-id: 43NbktDJ
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           loaders: neoforge
           game-versions: '26.1.2'
@@ -41,3 +47,27 @@ jobs:
           files: build/libs/!(*-@(dev|sources|javadoc)).jar
           dependencies: |
             kubejs(required)
+
+      # A hard check on top of mc-publish's own success/failure reporting - it reported success
+      # once before with nothing actually created on Modrinth (see the comment above), so this
+      # re-queries the project afterward and fails the job for real if the new version isn't there.
+      - name: Verify the version actually landed on Modrinth
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          # Authenticated - the project is still in draft/private review status right now, so an
+          # unauthenticated request (as anyone browsing the public API would make) 404s regardless
+          # of whether a version actually exists yet.
+          found=$(curl -s \
+            -H "User-Agent: KubeUI-CI/1.0 (github.com/Zynora-fr/KubeUI)" \
+            -H "Authorization: $MODRINTH_TOKEN" \
+            "https://api.modrinth.com/v2/project/43NbktDJ/version" \
+            | grep -o "\"version_number\":\"$version\"" || true)
+
+          if [ -z "$found" ]; then
+            echo "::error::mc-publish reported success, but no version '$version' exists on the Modrinth project afterward."
+            exit 1
+          fi
+
+          echo "Confirmed: version $version is live on Modrinth."
