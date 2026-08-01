@@ -9,7 +9,7 @@
 No Discord server for now - GitHub Issues/Discussions cover support without needing a separate
 account or a community to moderate from day one. A Discord (or Discord-adjacent) channel is a
 reasonable thing to add once there's an active enough user base that async GitHub threads stop
-being enough - tracked in [BACKLOG.md](BACKLOG.md), not promised for any particular version.
+being enough - not promised for any particular version.
 
 > **Note for the maintainer:** GitHub Discussions needs to be turned on once for this repo
 > (Settings > General > Features > Discussions) before the link above resolves to anything - it

@@ -41,4 +41,4 @@ single codebase). Practically:
 
 Everything before `1.0.0` is explicitly unstable: any release, including a patch, may include a
 script-facing breaking change if it's needed to get the API right before committing to it long
-term. See [MILESTONE_v1.md](MILESTONE_v1.md) for what "stable enough to call it 1.0.0" means here.
+term.

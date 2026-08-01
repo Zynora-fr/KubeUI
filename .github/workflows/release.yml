@@ -1,6 +1,6 @@
 name: Release to Modrinth
 
-# Modrinth only, by design - see MODRINTH.md. Push a tag like `v0.1.0` to publish that build.
+# Modrinth only, by design. Push a tag like `v0.1.0` to publish that build.
 on:
   push:
     tags:
