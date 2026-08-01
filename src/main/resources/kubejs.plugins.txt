@@ -1,0 +1,2 @@
+dev.kubeui.plugin.KubeUIPlugin client
+dev.kubeui.plugin.KubeUIServerPlugin

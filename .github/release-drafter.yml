@@ -1,0 +1,36 @@
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+categories:
+  - title: 'Breaking changes'
+    labels: ['breaking']
+  - title: 'New features'
+    labels: ['feature', 'enhancement']
+  - title: 'Bug fixes'
+    labels: ['bug', 'fix']
+  - title: 'Documentation'
+    labels: ['documentation']
+  - title: 'Maintenance'
+    labels: ['chore', 'dependencies', 'ci']
+
+change-template: '- $TITLE (#$NUMBER)'
+change-title-escapes: '\<*_&'
+
+version-resolver:
+  major:
+    labels: ['breaking']
+  minor:
+    labels: ['feature', 'enhancement']
+  patch:
+    labels: ['bug', 'fix', 'chore', 'dependencies', 'ci', 'documentation']
+  default: patch
+
+exclude-labels:
+  - 'skip-changelog'
+
+template: |
+  ## What's changed
+
+  $CHANGES
+
+  See [README.md](README.md#versions) for the exact Minecraft/NeoForge/KubeJS versions this build targets.

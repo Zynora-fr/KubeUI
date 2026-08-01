@@ -1,0 +1,43 @@
+name: Release to Modrinth
+
+# Modrinth only, by design - see MODRINTH.md. Push a tag like `v0.1.0` to publish that build.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish-modrinth:
+    name: Build and publish to Modrinth
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Build
+        run: ./gradlew build --stacktrace
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # MODRINTH_TOKEN still needs to be added as a repo secret (Settings > Secrets and
+      # variables > Actions > New repository secret) - never hardcode a token here.
+      - name: Publish to Modrinth
+        uses: Kira-NT/mc-publish@v3
+        with:
+          modrinth-id: kubeui
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          loaders: neoforge
+          game-versions: '26.1.2'
+          version: ${{ steps.version.outputs.version }}
+          name: KubeUI ${{ steps.version.outputs.version }}
+          version-type: release
+          files: build/libs/!(*-@(dev|sources|javadoc)).jar
+          dependencies: |
+            kubejs(required)

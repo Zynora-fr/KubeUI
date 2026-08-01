@@ -1,0 +1,200 @@
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+
+plugins {
+    id 'java-library'
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.neoforged.moddev' version '2.0.143'
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+// Minecraft 26.1.2 ships with Java 25.
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+repositories {
+    mavenLocal()
+
+    maven {
+        url = 'https://maven.latvian.dev/releases'
+        content {
+            includeGroup 'dev.latvian.mods'
+            includeGroup 'dev.latvian.apps'
+        }
+    }
+
+    // Mirrors a couple of KubeJS's own transitive runtime dependencies that aren't on Maven Central.
+    maven {
+        url = 'https://maven.latvian.dev/mirror'
+        content {
+            includeGroup 'com.github.rtyley'
+        }
+    }
+
+    // For test-only dependencies (JUnit) - not used by the mod itself.
+    mavenCentral()
+}
+
+neoForge {
+    version = project.neoforge_version
+
+    validateAccessTransformers = true
+
+    runs {
+        client {
+            client()
+        }
+        data {
+            clientData()
+        }
+        server {
+            server()
+        }
+    }
+
+    mods {
+        kubeui {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    // KubeUI is an addon: KubeJS must be provided by the runtime environment, not bundled.
+    compileOnly "dev.latvian.mods:kubejs-neoforge:${kubejs_version}"
+
+    // Unit tests for pure (Minecraft-free) logic only - see KubeUILayoutMath/-Test.
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+// KubeJS is compileOnly (see above), so it's missing from the dev run by default.
+// Resolve the real mod jars and drop them into run/mods so `runClient`/`runServer` actually load them.
+// Only KubeJS itself and Rhino (its required "rhino" mod dependency) are fetched, non-transitively:
+// KubeJS's other transitive deps (tiny-java-server, animated-gif-lib, better-advanced-tooltips) are
+// already embedded inside the kubejs-neoforge jar via JarJar.
+//
+// The embedded better-advanced-tooltips (BAT) copy needs a small patch below: its mixin config ships
+// without a refmap and fails injection ("No refMap loaded") when its JarJar-extracted copy is loaded
+// inside a *third-party* ModDevGradle dev run (as opposed to KubeJS's own dev environment, or a real
+// production install, where this isn't an issue) - it crashes the game on boot. KubeJS itself has a
+// hard compile-time reference to BAT's `BATIcons` class (dev.latvian.mods.kubejs.plugin.builtin.
+// wrapper.TextIcons), so BAT can't just be removed - only its `[[mixins]]` registration is stripped
+// from its bundled neoforge.mods.toml, which disables the crashing injector while keeping its classes
+// loadable. This only affects this dev-testing setup, not the built kubeui jar.
+tasks.register('downloadKubeJS') {
+    def resolved = configurations.detachedConfiguration(
+        dependencies.create("dev.latvian.mods:kubejs-neoforge:${kubejs_version}") { transitive = false },
+        dependencies.create("dev.latvian.mods:rhino:2101.2.8-build.91") { transitive = false }
+    )
+    def outputDir = file('run/mods')
+
+    inputs.files(resolved)
+    outputs.dir(outputDir)
+
+    doLast {
+        outputDir.mkdirs()
+
+        resolved.files.each { f ->
+            def dest = new File(outputDir, f.name)
+            dest.bytes = f.bytes
+
+            if (f.name.startsWith('kubejs-neoforge-')) {
+                FileSystems.newFileSystem(URI.create("jar:${dest.toURI()}"), [:]).withCloseable { zipfs ->
+                    def jarjarDir = zipfs.getPath('META-INF/jarjar')
+                    def batEntry = Files.list(jarjarDir).filter {
+                        it.fileName.toString().startsWith('better-advanced-tooltips-')
+                    }.findFirst().orElse(null)
+
+                    if (batEntry != null) {
+                        def batTemp = File.createTempFile('kubeui-bat-', '.jar')
+                        batTemp.bytes = Files.readAllBytes(batEntry)
+
+                        FileSystems.newFileSystem(URI.create("jar:${batTemp.toURI()}"), [:]).withCloseable { batfs ->
+                            def modsToml = batfs.getPath('META-INF/neoforge.mods.toml')
+                            def text = new String(Files.readAllBytes(modsToml), 'UTF-8')
+                            text = text.replaceAll(/(?s)\n\[\[mixins\]\]\s*\nconfig\s*=\s*"[^"]*"\s*/, '\n')
+                            Files.write(modsToml, text.getBytes('UTF-8'))
+                        }
+
+                        Files.delete(batEntry)
+                        Files.write(batEntry, batTemp.bytes)
+                        batTemp.delete()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Syncs the tracked test scripts in testkubejs/ into the dev run's kubejs/ folder,
+// so KubeUI.builder(...) has something exercising it every time you launch the dev client.
+tasks.register('syncTestScripts', Sync) {
+    from(file('testkubejs'))
+    into(file('run/kubejs'))
+}
+
+tasks.matching { it.name in ['runClient', 'runServer', 'runData'] }.configureEach {
+    dependsOn tasks.named('downloadKubeJS'), tasks.named('syncTestScripts')
+}
+
+// Expands ${...} placeholders from gradle.properties into neoforge.mods.toml at build time.
+tasks.withType(ProcessResources).configureEach {
+    var replaceProperties = [
+        minecraft_version      : minecraft_version,
+        minecraft_version_range: minecraft_version_range,
+        neoforge_version       : neoforge_version,
+        neoforge_version_range : neoforge_version_range,
+        loader_version_range   : loader_version_range,
+        kubejs_mod_version_range: kubejs_mod_version_range,
+        mod_id                 : mod_id,
+        mod_name               : mod_name,
+        mod_license             : mod_license,
+        mod_version            : mod_version,
+        mod_authors            : mod_authors,
+        mod_description        : mod_description
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replaceProperties
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url = "file://${project.projectDir}/repo"
+        }
+    }
+}
+
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}

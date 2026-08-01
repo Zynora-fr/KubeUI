@@ -1,0 +1,47 @@
+name: Bug report
+description: Something in KubeUI doesn't work as documented
+labels: ['bug']
+body:
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal script that reproduces it
+      description: A short client_scripts/server_scripts snippet. This is the single most useful thing you can include.
+      render: js
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs. actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Relevant log/crash report
+      description: The exact error from logs/latest.log or crash-reports/, if there is one.
+      render: text
+
+  - type: input
+    id: kubeui-version
+    attributes:
+      label: KubeUI version
+    validations:
+      required: true
+
+  - type: input
+    id: kubejs-version
+    attributes:
+      label: KubeJS / Minecraft / NeoForge versions
+      placeholder: 'e.g. KubeJS 8.0.4, Minecraft 26.1.2, NeoForge 26.1.2.84'
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-mods
+    attributes:
+      label: Other mods installed
+      description: Only needed if you suspect an interaction - leave blank otherwise.

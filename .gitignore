@@ -1,0 +1,35 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# Run directories
+run/
+runs/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.vscode/
+.eclipse/
+.settings/
+.classpath
+.project
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Internal roadmap/planning docs - not part of the published project
+UPDATE/

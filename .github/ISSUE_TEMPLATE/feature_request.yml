@@ -1,0 +1,23 @@
+name: Feature request
+description: A new widget, builder method, or capability you'd like to see
+labels: ['feature']
+body:
+  - type: textarea
+    id: api
+    attributes:
+      label: What script API would you want to write?
+      description: A short example (even pseudocode) of how you'd want to call it - this is more useful than a prose description.
+      render: js
+
+  - type: textarea
+    id: why
+    attributes:
+      label: What does this let you do that you can't do today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Workarounds you've tried
+      description: Anything you're currently doing instead (e.g. combining existing widgets, a custom Java widget via KubeUIWidgets.register).

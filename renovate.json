@@ -1,0 +1,55 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "labels": ["dependencies"],
+  "gradle": {
+    "enabled": true
+  },
+  "github-actions": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Group the Minecraft/NeoForge/KubeJS version trio - they must stay compatible with each other (see gradle.properties), so bump them together rather than as separate PRs.",
+      "matchFileNames": ["gradle.properties"],
+      "matchPackageNames": [
+        "neoforge_version",
+        "neoforge_version_range",
+        "minecraft_version",
+        "minecraft_version_range",
+        "kubejs_version"
+      ],
+      "groupName": "Minecraft/NeoForge/KubeJS versions",
+      "groupSlug": "mc-neoforge-kubejs"
+    },
+    {
+      "description": "The ModDevGradle plugin version in build.gradle.",
+      "matchFileNames": ["build.gradle"],
+      "matchPackageNames": ["net.neoforged.moddev"],
+      "groupName": "ModDevGradle"
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "gradle.properties isn't picked up by Renovate's gradle manager on its own (it's plain key=value, not a version catalog) - these regex rules teach it to read the specific properties build.gradle interpolates as dependency coordinates.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^gradle\\.properties$/"],
+      "matchStrings": [
+        "neoforge_version=(?<currentValue>[^\\s]+)"
+      ],
+      "depNameTemplate": "net.neoforged:neoforge",
+      "datasourceTemplate": "maven",
+      "registryUrlTemplate": "https://maven.neoforged.net/releases"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^gradle\\.properties$/"],
+      "matchStrings": [
+        "kubejs_version=(?<currentValue>[^\\s]+)"
+      ],
+      "depNameTemplate": "dev.latvian.mods:kubejs-neoforge",
+      "datasourceTemplate": "maven",
+      "registryUrlTemplate": "https://maven.latvian.dev/releases"
+    }
+  ]
+}
