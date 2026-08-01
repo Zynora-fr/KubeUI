@@ -1,14 +1,28 @@
-name: Release to Modrinth
+name: Release
 
-# Modrinth only, by design. Push a tag like `v0.1.0` to publish that build.
+# Two ways to trigger:
+# - `git push origin vX.Y.Z` -> publishes to BOTH Modrinth and CurseForge.
+# - Actions tab > "Release" > "Run workflow" -> pick just "modrinth", "curseforge", or "both"
+#   (e.g. to redo a single platform after a partial failure, without cutting a new tag).
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: Where to publish
+        required: true
+        default: both
+        type: choice
+        options:
+          - modrinth
+          - curseforge
+          - both
 
 jobs:
-  publish-modrinth:
-    name: Build and publish to Modrinth
+  release:
+    name: Build and publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,14 +40,27 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      # MODRINTH_TOKEN still needs to be added as a repo secret (Settings > Secrets and
-      # variables > Actions > New repository secret) - never hardcode a token here.
+      - name: Decide targets
+        id: targets
+        env:
+          CHOICE: ${{ github.event_name == 'workflow_dispatch' && inputs.targets || 'both' }}
+        run: |
+          modrinth=false
+          curseforge=false
+          [ "$CHOICE" = "modrinth" ] || [ "$CHOICE" = "both" ] && modrinth=true
+          [ "$CHOICE" = "curseforge" ] || [ "$CHOICE" = "both" ] && curseforge=true
+          echo "modrinth=$modrinth" >> "$GITHUB_OUTPUT"
+          echo "curseforge=$curseforge" >> "$GITHUB_OUTPUT"
+
+      # MODRINTH_TOKEN needs to be added as a repo secret (Settings > Secrets and variables >
+      # Actions > New repository secret) - never hardcode a token here.
       #
       # modrinth-id is the project's actual Modrinth id (not the "kubeui" slug) - using the slug
       # here previously made mc-publish report success without actually creating a version
       # (confirmed via `GET /v2/project/kubeui` showing an empty "versions" array right after a
       # "successful" run). The real id is stable even if the slug ever changes.
       - name: Publish to Modrinth
+        if: steps.targets.outputs.modrinth == 'true'
         id: modrinth
         uses: Kira-NT/mc-publish@v3
         with:
@@ -51,7 +78,8 @@ jobs:
       # A hard check on top of mc-publish's own success/failure reporting - it reported success
       # once before with nothing actually created on Modrinth (see the comment above), so this
       # re-queries the project afterward and fails the job for real if the new version isn't there.
-      - name: Verify the version actually landed on Modrinth
+      - name: Verify the Modrinth version actually landed
+        if: steps.targets.outputs.modrinth == 'true'
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
         run: |
@@ -66,8 +94,31 @@ jobs:
             | grep -o "\"version_number\":\"$version\"" || true)
 
           if [ -z "$found" ]; then
-            echo "::error::mc-publish reported success, but no version '$version' exists on the Modrinth project afterward."
+            echo "::error::mc-publish reported success for Modrinth, but no version '$version' exists on the project afterward."
             exit 1
           fi
 
           echo "Confirmed: version $version is live on Modrinth."
+
+      # CURSEFORGE_TOKEN needs to be added as a repo secret too (console.curseforge.com > your
+      # project > API Tokens > generate one - this is a different token type than the general
+      # CurseForge Core API key).
+      #
+      # No post-publish verification step here yet (unlike Modrinth above) - CurseForge's read API
+      # needs a separate Core API key we don't have configured. Check the "curseforge-url" this
+      # step prints, and the project page itself, until that gets added.
+      - name: Publish to CurseForge
+        if: steps.targets.outputs.curseforge == 'true'
+        id: curseforge
+        uses: Kira-NT/mc-publish@v3
+        with:
+          curseforge-id: '1635257'
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          loaders: neoforge
+          game-versions: '26.1.2'
+          version: ${{ steps.version.outputs.version }}
+          name: KubeUI ${{ steps.version.outputs.version }}
+          version-type: release
+          files: build/libs/!(*-@(dev|sources|javadoc)).jar
+          dependencies: |
+            kubejs(required)
