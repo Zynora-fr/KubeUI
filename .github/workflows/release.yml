@@ -26,7 +26,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: read
     steps:
       - uses: actions/checkout@v4
 
@@ -55,38 +54,35 @@ jobs:
             echo "version=$version" >> "$GITHUB_OUTPUT"
           fi
 
-      # Only on a real tag push: turns the running draft that release-drafter.yml has been keeping
-      # up to date since the last release (grouped by PR label, see .github/release-drafter.yml)
-      # into the actual published GitHub Release for this tag - no more hand-editing CHANGELOG.md
-      # before tagging. On a manual "Run workflow" re-run there's no new tag/PRs to draft from, so
-      # this is skipped and the changelog step below falls back to CHANGELOG.md instead.
-      - name: Publish the GitHub release from the drafted changelog
-        if: github.event_name == 'push'
-        id: drafted_release
-        uses: release-drafter/release-drafter@v7
-        with:
-          publish: true
-          tag: ${{ steps.version.outputs.tag }}
-          commitish: ${{ github.sha }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+      # CHANGELOG.md is the single source of truth for release notes - this repo is worked on by
+      # direct pushes to main rather than labeled PRs, so a PR-label-driven changelog (release-drafter)
+      # never had anything to draw from and always produced an empty "No changes" release. Every
+      # tagged version needs its own "## X.Y.Z" section added to CHANGELOG.md before tagging; this
+      # step extracts just that section (from its heading up to the next "## " heading, or EOF).
       - name: Resolve changelog text
         id: changelog
-        env:
-          DRAFTED_BODY: ${{ steps.drafted_release.outputs.body }}
-          IS_TAG_PUSH: ${{ github.event_name == 'push' }}
         run: |
-          if [ "$IS_TAG_PUSH" = "true" ]; then
-            body="$DRAFTED_BODY"
-          else
-            body=$(cat CHANGELOG.md)
+          version="${{ steps.version.outputs.version }}"
+          body=$(awk -v ver="## $version" 'BEGIN{f=0} $0==ver{f=1;next} f && /^## /{exit} f{print}' CHANGELOG.md)
+          if [ -z "$body" ]; then
+            echo "::error::No '## $version' section found in CHANGELOG.md - add one before tagging."
+            exit 1
           fi
           {
             echo "text<<CHANGELOG_EOF"
             echo "$body"
             echo "CHANGELOG_EOF"
           } >> "$GITHUB_OUTPUT"
+
+      # Only on a real tag push - a manual "Run workflow" re-run (e.g. to redo just one platform
+      # after a partial failure) doesn't need to touch the GitHub Release again.
+      - name: Publish the GitHub release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: KubeUI ${{ steps.version.outputs.version }}
+          body: ${{ steps.changelog.outputs.text }}
 
       - name: Decide targets
         id: targets

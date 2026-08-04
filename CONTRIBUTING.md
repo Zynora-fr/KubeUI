@@ -35,9 +35,10 @@ than a prose description.
 ## Pull requests
 
 - Keep PRs focused - one change, one PR. Large unrelated cleanups make review slower, not faster.
-- Label it (`feature`, `fix`, `documentation`, `chore`, `breaking`, ...) - that label drives the
-  automated changelog (see [`.github/release-drafter.yml`](.github/release-drafter.yml)) and the
-  version bump it implies (see [VERSIONING.md](VERSIONING.md)).
+- If your change is user-facing, add an entry under the in-progress version's section in
+  [CHANGELOG.md](CHANGELOG.md) - that file is what actually ships as the release notes on GitHub,
+  Modrinth and CurseForge (see [`.github/workflows/release.yml`](.github/workflows/release.yml)).
+  See [VERSIONING.md](VERSIONING.md) for what counts as a major/minor/patch change.
 - CI (`.github/workflows/ci.yml`) runs a full build + a headless client boot check on every PR -
   it needs to pass before merge.
 
