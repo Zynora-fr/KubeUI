@@ -7,6 +7,7 @@ import java.lang.ref.WeakReference;
 /// can't inspect the *currently* open screen - typing it closes that screen first).
 public final class KubeUIDebug {
 	static boolean outlineEnabled = false;
+	static boolean gridEnabled = false;
 	private static WeakReference<KubeUIScreen> lastOpened = new WeakReference<>(null);
 
 	private KubeUIDebug() {
@@ -26,6 +27,14 @@ public final class KubeUIDebug {
 
 	public static void setOutlineEnabled(boolean enabled) {
 		outlineEnabled = enabled;
+	}
+
+	public static boolean isGridEnabled() {
+		return gridEnabled;
+	}
+
+	public static void setGridEnabled(boolean enabled) {
+		gridEnabled = enabled;
 	}
 
 	/// Debug summary of the most recently opened screen, or null if none has been opened yet.

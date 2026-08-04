@@ -1,5 +1,5 @@
-// Test script for the KubeUI addon - exercises every widget (Phases 1-12) and every layout
-// feature (Phases 13-20: row, grid, scrollPanel, list, anchor, width/height/align/padding).
+// Test script for the KubeUI addon - exercises every basic widget and every layout
+// feature (row, grid, scrollPanel, list, anchor, width/height/align/padding).
 // Opened from the test menu (see kubeui_test_menu.js), which opens automatically on world join.
 
 function openKubeUITestScreen() {

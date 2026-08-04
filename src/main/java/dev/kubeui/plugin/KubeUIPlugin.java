@@ -3,6 +3,7 @@ package dev.kubeui.plugin;
 import dev.kubeui.gui.KubeUIContext;
 import dev.kubeui.gui.KubeUIEvents;
 import dev.kubeui.gui.KubeUIScreenBuilder;
+import dev.kubeui.gui.KubeUIScreenInjector;
 import dev.kubeui.gui.KubeUISidebar;
 import dev.latvian.mods.kubejs.event.EventGroupRegistry;
 import dev.latvian.mods.kubejs.plugin.ClassFilter;
@@ -18,6 +19,7 @@ public class KubeUIPlugin implements KubeJSPlugin {
 			filter.allow(KubeUIScreenBuilder.class);
 			filter.allow(KubeUIContext.class);
 			filter.allow(KubeUISidebar.class);
+			filter.allow(KubeUIScreenInjector.class);
 		}
 	}
 
@@ -26,6 +28,7 @@ public class KubeUIPlugin implements KubeJSPlugin {
 		if (bindings.type() == ScriptType.CLIENT) {
 			bindings.add("KubeUI", KubeUIScreenBuilder.class);
 			bindings.add("KubeUISidebar", KubeUISidebar.class);
+			bindings.add("KubeUIScreenInjector", KubeUIScreenInjector.class);
 		}
 	}
 

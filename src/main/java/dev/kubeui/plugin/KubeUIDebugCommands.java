@@ -16,7 +16,8 @@ import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 
 /// `/kubeui debug` (report on the most recently opened KubeUI screen - a chat command can't
 /// inspect the *currently* open one, since typing it closes that screen first),
-/// `/kubeui outline` (toggle widget bounding-box outlines), `/kubeui screenshot` and
+/// `/kubeui outline` (toggle widget bounding-box outlines), `/kubeui grid` (toggle a layout debug
+/// grid with pixel dimensions, on top of the outline), `/kubeui screenshot` and
 /// `/kubeui scale [factor]` (shrink/grow every KubeUI screen - see [KubeUIScreenBuilder#setScale]).
 @EventBusSubscriber(modid = KubeUI.MOD_ID, value = Dist.CLIENT)
 final class KubeUIDebugCommands {
@@ -29,6 +30,7 @@ final class KubeUIDebugCommands {
 			Commands.literal("kubeui")
 				.then(Commands.literal("debug").executes(ctx -> debug(ctx.getSource())))
 				.then(Commands.literal("outline").executes(ctx -> outline(ctx.getSource())))
+				.then(Commands.literal("grid").executes(ctx -> grid(ctx.getSource())))
 				.then(Commands.literal("screenshot").executes(ctx -> screenshot(ctx.getSource())))
 				.then(Commands.literal("scale")
 					.executes(ctx -> scaleStatus(ctx.getSource()))
@@ -53,6 +55,13 @@ final class KubeUIDebugCommands {
 		boolean enabled = !KubeUIDebug.isOutlineEnabled();
 		KubeUIDebug.setOutlineEnabled(enabled);
 		source.sendSystemMessage(Component.literal("KubeUI widget outlines: " + (enabled ? "ON" : "OFF")));
+		return 1;
+	}
+
+	private static int grid(CommandSourceStack source) {
+		boolean enabled = !KubeUIDebug.isGridEnabled();
+		KubeUIDebug.setGridEnabled(enabled);
+		source.sendSystemMessage(Component.literal("KubeUI layout debug grid: " + (enabled ? "ON" : "OFF")));
 		return 1;
 	}
 

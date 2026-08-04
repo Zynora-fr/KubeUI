@@ -1,4 +1,4 @@
-// Test script for KubeUI's Phase 21-30 UX features: tabs, modal dialogs, draggable/resizable
+// Test script for KubeUI's UX features: tabs, modal dialogs, draggable/resizable
 // windows, tooltips, enable/visible toggling, add/remove after open, and custom narration.
 // Opened from the test menu (see kubeui_test_menu.js), which opens automatically on world join.
 

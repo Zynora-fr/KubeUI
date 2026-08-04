@@ -5,15 +5,15 @@
 function openKubeUITestMenu() {
     KubeUI.builder('KubeUI Test Menu')
         .label('info', 'Pick a demo to open:')
-        .button('Widget Gallery (Phases 1-20)', screen => {
+        .button('Widget Gallery', screen => {
             screen.close()
             openKubeUITestScreen()
         })
-        .button('UX Demo - tabs, drag, resize (Phases 21-30)', screen => {
+        .button('UX Demo - tabs, drag, resize', screen => {
             screen.close()
             openKubeUIUXDemo()
         })
-        .button('Item Shop (Phases 31-40, client-trusted demo)', screen => {
+        .button('Item Shop (client-trusted demo)', screen => {
             screen.close()
             openShop()
         })
@@ -21,13 +21,29 @@ function openKubeUITestMenu() {
             screen.close()
             openRealShop()
         })
-        .button('Sizes Playground (Phases 31-40)', screen => {
+        .button('Sizes Playground', screen => {
             screen.close()
             openSizesDemo()
         })
         .button('Responsive/Scale Demo (%-width, auto-scroll, /kubeui scale)', screen => {
             screen.close()
             openResponsiveDemo()
+        })
+        .button('More Widgets Demo', screen => {
+            screen.close()
+            openKubeUIWidgets2Demo()
+        })
+        .button('Data Widgets Demo (table, tree, chart, map, ...)', screen => {
+            screen.close()
+            openKubeUIDataWidgetsDemo()
+        })
+        .button('Layout & Render Demo (grow, split pane, scale, transitions, ...)', screen => {
+            screen.close()
+            openLayoutRenderDemo()
+        })
+        .button('Interaction Demo (drag & drop, hotkeys, undo, momentum, ...)', screen => {
+            screen.close()
+            openInteractionDemo()
         })
         .label('sidebarNote', 'Also: press E for the survival inventory - see the icon bar on its left edge.')
         .divider()

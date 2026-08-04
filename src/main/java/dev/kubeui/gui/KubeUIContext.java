@@ -138,6 +138,39 @@ public class KubeUIContext {
 		}
 	}
 
+	/// Reads the current value (0 if unset) of a `rating(id, ...)` widget.
+	public int getRatingValue(String id) {
+		var widget = screen.ratings.get(id);
+		return widget != null ? widget.value() : 0;
+	}
+
+	/// Sets a `rating(id, ...)` widget's value directly (doesn't fire `onChange` - same
+	/// silent-setter convention as every other `setXxxValue`). No-op if `id` doesn't exist.
+	public void setRatingValue(String id, int value) {
+		var widget = screen.ratings.get(id);
+		if (widget != null) {
+			widget.setValue(value);
+		}
+	}
+
+	/// Reads the current raw key code (0 if unset) bound to a `keybindCapture(id, ...)` widget.
+	public int getKeybindValue(String id) {
+		var widget = screen.keybindCaptures.get(id);
+		return widget != null ? widget.keyCode() : 0;
+	}
+
+	/// Reads the currently-selected indices (into the `items` list it was built from, ascending)
+	/// of a `selectableList(id, ...)` - empty if nothing's selected or `id` doesn't exist.
+	public List<Integer> getSelectedListItems(String id) {
+		var state = screen.listSelections.get(id);
+		if (state == null) {
+			return List.of();
+		}
+		var sorted = new java.util.ArrayList<>(state.selected);
+		java.util.Collections.sort(sorted);
+		return sorted;
+	}
+
 	/// Reads the current color of a `colorPicker(id, ...)` as an opaque ARGB int (0 if `id`
 	/// doesn't exist).
 	public int getColor(String id) {
@@ -242,5 +275,26 @@ public class KubeUIContext {
 	/// Closes the screen - immediately, or after a fade-out if the screen used `.animated()`.
 	public void close() {
 		screen.requestClose();
+	}
+
+	/// Replaces this screen with `newBuilder`'s, cross-fading between the two over `durationMs`
+	/// instead of the abrupt close-then-open a plain `.close()` + `newBuilder.open()` would be -
+	/// this screen keeps rendering (fading out) while the new one fades in over it.
+	public void transitionTo(KubeUIScreenBuilder newBuilder, int durationMs) {
+		var next = new KubeUIScreen(newBuilder);
+		next.beginCrossFadeFrom(screen, durationMs);
+		Minecraft.getInstance().setScreen(next);
+	}
+
+	/// Same as [#transitionTo(KubeUIScreenBuilder, int)], with a 200ms cross-fade.
+	public void transitionTo(KubeUIScreenBuilder newBuilder) {
+		transitionTo(newBuilder, 200);
+	}
+
+	/// Briefly shakes the screen and flashes it red - for signaling a refused/invalid action (a
+	/// disabled button clicked, an empty required field) without interrupting the player with a
+	/// blocking `KubeUI.alert(...)`.
+	public void shake() {
+		screen.shake();
 	}
 }

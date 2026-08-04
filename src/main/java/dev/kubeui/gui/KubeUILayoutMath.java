@@ -64,4 +64,15 @@ final class KubeUILayoutMath {
 	static String formatHexColor(int argb) {
 		return String.format("#%06X", argb & 0xFFFFFF);
 	}
+
+	/// Black or white (opaque), whichever reads better on top of `backgroundArgb` - standard
+	/// relative-luminance threshold, used for badge/pill text so callers don't have to pick a
+	/// contrasting color themselves.
+	static int readableTextColor(int backgroundArgb) {
+		int r = (backgroundArgb >> 16) & 0xFF;
+		int g = (backgroundArgb >> 8) & 0xFF;
+		int b = backgroundArgb & 0xFF;
+		double luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
+		return luminance > 0.6 ? 0xFF000000 : 0xFFFFFFFF;
+	}
 }
