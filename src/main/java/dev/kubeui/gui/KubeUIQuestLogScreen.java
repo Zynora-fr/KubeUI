@@ -87,7 +87,7 @@ public final class KubeUIQuestLogScreen {
 	}
 
 	private static void appendGroup(KubeUIScreenBuilder panel, String status, String heading, int totalWidth) {
-		var inGroup = lastKnownQuests.stream().filter(q -> status.equals(q.getStringOr("status", ""))).toList();
+		var inGroup = lastKnownQuests.stream().filter(q -> status.equals(KubeUINbtCompat.getStringOr(q, "status", ""))).toList();
 		if (inGroup.isEmpty()) {
 			return;
 		}
@@ -100,10 +100,10 @@ public final class KubeUIQuestLogScreen {
 	}
 
 	private static void appendQuestRow(KubeUIScreenBuilder panel, CompoundTag quest, int totalWidth) {
-		String id = quest.getStringOr("id", "");
-		String title = quest.getStringOr("title", id);
-		String description = quest.getStringOr("description", "");
-		String status = quest.getStringOr("status", "");
+		String id = KubeUINbtCompat.getStringOr(quest, "id", "");
+		String title = KubeUINbtCompat.getStringOr(quest, "title", id);
+		String description = KubeUINbtCompat.getStringOr(quest, "description", "");
+		String status = KubeUINbtCompat.getStringOr(quest, "status", "");
 
 		panel.row(row -> {
 			row.label("title_" + id, title).width(totalWidth - 110);
@@ -124,11 +124,11 @@ public final class KubeUIQuestLogScreen {
 		} else if ("locked".equals(status)) {
 			panel.label("lockedNote_" + id, "  Requires another quest to be completed first.");
 		} else {
-			for (var entry : quest.getListOrEmpty("objectives")) {
+			for (var entry : quest.getList("objectives", 10)) {
 				if (entry instanceof CompoundTag objectiveTag) {
-					String label = objectiveTag.getStringOr("label", "");
-					int progress = objectiveTag.getIntOr("progress", 0);
-					int target = objectiveTag.getIntOr("target", 1);
+					String label = KubeUINbtCompat.getStringOr(objectiveTag, "label", "");
+					int progress = KubeUINbtCompat.getIntOr(objectiveTag, "progress", 0);
+					int target = KubeUINbtCompat.getIntOr(objectiveTag, "target", 1);
 					panel.row(row -> {
 						row.label("obj_" + id + "_" + label.hashCode(), "  - " + label + ": " + progress + "/" + target).width(totalWidth - 160);
 						row.progressBar("prog_" + id + "_" + label.hashCode(), progress, Math.max(1, target)).width(150);

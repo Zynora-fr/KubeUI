@@ -1,6 +1,5 @@
 package dev.kubeui.gui;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 /// Shared helper for [KubeUIScreenBuilder#setFontScale(double)] - wraps a text draw call in a real
 /// transform (`GuiGraphicsExtractor#pose`, same mechanism [KubeUIScreenBuilder#renderScale(double)]

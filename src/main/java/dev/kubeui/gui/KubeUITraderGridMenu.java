@@ -6,7 +6,7 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
@@ -53,12 +53,22 @@ final class KubeUITraderGridMenu extends AbstractContainerMenu {
 		// x=108, not the usual x=8 - see KubeUITradeExecuteMenu's identical fix for why (real
 		// vanilla MerchantMenu, decompiled and verified, positions the player's own inventory
 		// slots there for this exact texture).
-		addStandardInventorySlots(inventory, 108, 84);
+		// 1.21.1 has no addStandardInventorySlots(...) helper - inlined here matching the
+		// real vanilla MerchantMenu/CraftingMenu convention exactly (3x9 main inventory grid,
+		// then a separate 9-wide hotbar row 58px below the grid's own top).
+		for (int row = 0; row < 3; row++) {
+			for (int col = 0; col < 9; col++) {
+				addSlot(new Slot(inventory, col + row * 9 + 9, 108 + col * 18, 84 + row * 18));
+			}
+		}
+		for (int col = 0; col < 9; col++) {
+			addSlot(new Slot(inventory, col, 108 + col * 18, 84 + 58));
+		}
 	}
 
 	@Override
-	public void clicked(int slotIndex, int button, ContainerInput type, Player player) {
-		if (slotIndex == RESULT_INDEX && type == ContainerInput.PICKUP && button == 0
+	public void clicked(int slotIndex, int button, ClickType type, Player player) {
+		if (slotIndex == RESULT_INDEX && type == ClickType.PICKUP && button == 0
 			&& getSlot(RESULT_INDEX).hasItem() && player instanceof ServerPlayer serverPlayer
 			&& tryCaptureAndAdd(serverPlayer)) {
 			return;

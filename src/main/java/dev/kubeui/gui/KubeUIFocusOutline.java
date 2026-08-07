@@ -1,6 +1,5 @@
 package dev.kubeui.gui;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 
 /// Draws a visible focus outline for a KubeUI custom widget - vanilla `Button`/`Checkbox`/etc.

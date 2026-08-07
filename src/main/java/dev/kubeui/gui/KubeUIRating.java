@@ -1,12 +1,9 @@
 package dev.kubeui.gui;
 
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.BiConsumer;
@@ -16,6 +13,7 @@ import java.util.function.BiConsumer;
 /// geometry - Minecraft's font renderer already covers these via its Unicode fallback pages, the
 /// same mechanism that renders any other non-ASCII character.
 class KubeUIRating extends AbstractWidget implements KubeUINarratable {
+	private final DoubleClickTracker doubleClickTracker = new DoubleClickTracker();
 	private static final char FILLED = '★';
 	private static final char EMPTY = '☆';
 	private static final int STAR_SIZE = 12;
@@ -51,6 +49,10 @@ class KubeUIRating extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	public void onClick(double mouseX, double mouseY, int button) {
+		onClick(new MouseButtonEvent(mouseX, mouseY, button), doubleClickTracker.registerClick(mouseX, mouseY));
+	}
+
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
 		if (!active) {
 			return;
@@ -64,6 +66,10 @@ class KubeUIRating extends AbstractWidget implements KubeUINarratable {
 	/// since a widget a keyboard user can now clearly see is focused should also be operable by
 	/// keyboard, not just visually highlighted.
 	@Override
+	public boolean keyPressed(int keyCode, int scancode, int modifiers) {
+		return keyPressed(new KeyEvent(keyCode, scancode, modifiers));
+	}
+
 	public boolean keyPressed(KeyEvent event) {
 		if (!active || !(event.isLeft() || event.isRight())) {
 			return false;
@@ -74,6 +80,10 @@ class KubeUIRating extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	protected void renderWidget(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		extractWidgetRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
+	}
+
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		int hoverStar = active && isHovered() ? (int) ((mouseX - getX()) / STAR_SIZE) + 1 : -1;
 

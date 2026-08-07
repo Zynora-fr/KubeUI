@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0-1.21.1
+
+Port of 0.3.0 to NeoForge 1.21.1 (KubeJS 2101.7.2-build.368) - same feature set as 0.3.0 below,
+rebuilt against 1.21.1's own rendering, input, scrolling, NBT, permissions, networking, recipe and
+container-menu APIs. No functional or content changes versus 0.3.0.
+
 ## 0.3.0
 
 **Theming & accessibility:** named theme presets (`"dark"`/`"light"`/`"high-contrast"`, or a custom

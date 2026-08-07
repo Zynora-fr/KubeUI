@@ -57,9 +57,9 @@ public final class KubeUIRecipeDesignerScreen {
 		if (!lastKnownRecipes.isEmpty()) {
 			b.scrollPanel(listHeight, panel -> {
 				for (var tag : lastKnownRecipes) {
-					String name = tag.getStringOr("name", "?");
+					String name = KubeUINbtCompat.getStringOr(tag, "name", "?");
 					panel.row(row -> {
-						row.label("l_" + name, name + " (" + tag.getStringOr("kind", "?") + ")").width(totalWidth - 80);
+						row.label("l_" + name, name + " (" + KubeUINbtCompat.getStringOr(tag, "kind", "?") + ")").width(totalWidth - 80);
 						row.button("Delete", ctx -> {
 							var data = new CompoundTag();
 							data.putString("name", name);

@@ -55,7 +55,7 @@ final class KubeUIQuestEvents {
 				if (!"kill".equals(objective.type())) {
 					continue;
 				}
-				var wantedType = KubeUIQuests.resolveEntityType(objective.data().getStringOr("entity", ""));
+				var wantedType = KubeUIQuests.resolveEntityType(KubeUINbtCompat.getStringOr(objective.data(), "entity", ""));
 				if (wantedType != null && wantedType == deadType) {
 					KubeUIQuests.incrementObjectiveCounter(killer, def.id(), objective.id(), 1);
 				}

@@ -1,11 +1,8 @@
 package dev.kubeui.gui;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -17,6 +14,7 @@ import java.util.function.BiConsumer;
 /// row, ctrl-click toggles it without touching the rest, shift-click selects the whole range since
 /// the last click (same modifier conventions as vanilla's creative inventory/advancement screens).
 class KubeUIListSelectCheckbox extends AbstractWidget implements KubeUINarratable {
+	private final DoubleClickTracker doubleClickTracker = new DoubleClickTracker();
 	private static final int SIZE = 10;
 
 	private final int index;
@@ -39,6 +37,10 @@ class KubeUIListSelectCheckbox extends AbstractWidget implements KubeUINarratabl
 	}
 
 	@Override
+	public void onClick(double mouseX, double mouseY, int button) {
+		onClick(new MouseButtonEvent(mouseX, mouseY, button), doubleClickTracker.registerClick(mouseX, mouseY));
+	}
+
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
 		toggle(event.hasShiftDown(), event.hasControlDown());
 	}
@@ -48,6 +50,10 @@ class KubeUIListSelectCheckbox extends AbstractWidget implements KubeUINarratabl
 	/// keyboard, not just visually highlighted. Shift/Ctrl work the same as their mouse-click
 	/// equivalents (see [#onClick]) since [KeyEvent] exposes the same modifier accessors.
 	@Override
+	public boolean keyPressed(int keyCode, int scancode, int modifiers) {
+		return keyPressed(new KeyEvent(keyCode, scancode, modifiers));
+	}
+
 	public boolean keyPressed(KeyEvent event) {
 		if (!event.isSelection()) {
 			return false;
@@ -82,6 +88,10 @@ class KubeUIListSelectCheckbox extends AbstractWidget implements KubeUINarratabl
 	}
 
 	@Override
+	protected void renderWidget(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		extractWidgetRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
+	}
+
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		boolean checked = state.selected.contains(index);
 		graphics.outline(getX(), getY(), SIZE, SIZE, isHovered() ? 0xFFEAF3F3 : 0xFF6B7679);

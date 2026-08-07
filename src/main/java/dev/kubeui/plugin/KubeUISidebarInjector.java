@@ -29,8 +29,8 @@ final class KubeUISidebarInjector {
 		}
 
 		AbstractContainerScreen<?> containerScreen = inventoryScreen;
-		int x = containerScreen.getLeftPos() - KubeUISidebar.ICON_SIZE - EDGE_MARGIN;
-		int y = containerScreen.getTopPos();
+		int x = containerScreen.getGuiLeft() - KubeUISidebar.ICON_SIZE - EDGE_MARGIN;
+		int y = containerScreen.getGuiTop();
 
 		for (var widget : KubeUISidebar.createIconWidgets(x, y, GAP)) {
 			event.addListener(widget);

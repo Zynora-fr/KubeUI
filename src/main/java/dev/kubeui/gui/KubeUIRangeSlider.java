@@ -1,12 +1,9 @@
 package dev.kubeui.gui;
 
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /// A single track with two independently draggable handles
@@ -15,6 +12,7 @@ import net.minecraft.network.chat.Component;
 /// model assumes exactly one draggable position, so this implements its own hit-testing/dragging
 /// directly on top of `AbstractWidget`.
 class KubeUIRangeSlider extends AbstractWidget implements KubeUINarratable {
+	private final DoubleClickTracker doubleClickTracker = new DoubleClickTracker();
 	private static final int HANDLE_WIDTH = 4;
 	private static final int TRACK_HEIGHT = 2;
 
@@ -69,6 +67,10 @@ class KubeUIRangeSlider extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	public void onClick(double mouseX, double mouseY, int button) {
+		onClick(new MouseButtonEvent(mouseX, mouseY, button), doubleClickTracker.registerClick(mouseX, mouseY));
+	}
+
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
 		int lowX = valueToX(low);
 		int highX = valueToX(high);
@@ -77,6 +79,10 @@ class KubeUIRangeSlider extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	protected void onDrag(double mouseX, double mouseY, double dx, double dy) {
+		onDrag(new MouseButtonEvent(mouseX, mouseY, 0), dx, dy);
+	}
+
 	protected void onDrag(MouseButtonEvent event, double dx, double dy) {
 		updateFromMouse(event.x());
 	}
@@ -104,6 +110,10 @@ class KubeUIRangeSlider extends AbstractWidget implements KubeUINarratable {
 	/// get arrow-key support for free from vanilla), this widget implements its own hit-testing
 	/// directly on `AbstractWidget`, which doesn't provide any keyboard handling on its own.
 	@Override
+	public boolean keyPressed(int keyCode, int scancode, int modifiers) {
+		return keyPressed(new KeyEvent(keyCode, scancode, modifiers));
+	}
+
 	public boolean keyPressed(KeyEvent event) {
 		if (event.isUp() || event.isDown()) {
 			draggingHigh = !draggingHigh;
@@ -128,6 +138,10 @@ class KubeUIRangeSlider extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	protected void renderWidget(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		extractWidgetRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
+	}
+
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		String label = formatValue(low) + " - " + formatValue(high);
 		int color = styleColor != null ? styleColor : KubeUITheme.textColor();

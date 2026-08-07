@@ -1,10 +1,7 @@
 package dev.kubeui.gui;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.CharacterEvent;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -63,15 +60,16 @@ public class KubeUIMultiWindowHost extends Screen {
 	}
 
 	@Override
-	public void resize(int width, int height) {
-		super.resize(width, height);
+	public void resize(Minecraft minecraft, int width, int height) {
+		super.resize(minecraft, width, height);
 		for (var window : windows) {
 			window.buildDetached(width, height);
 		}
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+	public void render(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float delta) {
+		var graphics = new GuiGraphicsExtractor(realGraphics);
 		for (var window : windows) {
 			window.extractScaledRenderState(graphics, mouseX, mouseY, delta);
 		}
@@ -86,11 +84,11 @@ public class KubeUIMultiWindowHost extends Screen {
 	}
 
 	@Override
-	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		// Last-added = topmost = checked (and brought further to front on a hit) first.
 		for (int i = windows.size() - 1; i >= 0; i--) {
 			var window = windows.get(i);
-			if (window.mouseClicked(event, doubleClick)) {
+			if (window.mouseClicked(mouseX, mouseY, button)) {
 				focusedWindow = window;
 				windows.remove(i);
 				windows.add(window);
@@ -98,17 +96,17 @@ public class KubeUIMultiWindowHost extends Screen {
 			}
 		}
 		focusedWindow = null;
-		return super.mouseClicked(event, doubleClick);
+		return super.mouseClicked(mouseX, mouseY, button);
 	}
 
 	@Override
-	public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
-		return focusedWindow != null && focusedWindow.mouseDragged(event, dx, dy);
+	public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
+		return focusedWindow != null && focusedWindow.mouseDragged(mouseX, mouseY, button, dx, dy);
 	}
 
 	@Override
-	public boolean mouseReleased(MouseButtonEvent event) {
-		return focusedWindow != null && focusedWindow.mouseReleased(event);
+	public boolean mouseReleased(double mouseX, double mouseY, int button) {
+		return focusedWindow != null && focusedWindow.mouseReleased(mouseX, mouseY, button);
 	}
 
 	@Override
@@ -122,18 +120,18 @@ public class KubeUIMultiWindowHost extends Screen {
 	}
 
 	@Override
-	public boolean keyPressed(KeyEvent event) {
-		return (focusedWindow != null && focusedWindow.keyPressed(event)) || super.keyPressed(event);
+	public boolean keyPressed(int keyCode, int scancode, int modifiers) {
+		return (focusedWindow != null && focusedWindow.keyPressed(keyCode, scancode, modifiers)) || super.keyPressed(keyCode, scancode, modifiers);
 	}
 
 	@Override
-	public boolean keyReleased(KeyEvent event) {
-		return focusedWindow != null && focusedWindow.keyReleased(event);
+	public boolean keyReleased(int keyCode, int scancode, int modifiers) {
+		return focusedWindow != null && focusedWindow.keyReleased(keyCode, scancode, modifiers);
 	}
 
 	@Override
-	public boolean charTyped(CharacterEvent event) {
-		return focusedWindow != null && focusedWindow.charTyped(event);
+	public boolean charTyped(char codepoint, int modifiers) {
+		return focusedWindow != null && focusedWindow.charTyped(codepoint, modifiers);
 	}
 
 	@Override

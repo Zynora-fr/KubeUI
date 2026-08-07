@@ -1,6 +1,5 @@
 package dev.kubeui.gui;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -19,25 +18,32 @@ final class KubeUITradeExecuteScreen extends AbstractContainerScreen<KubeUITrade
 	private static final Component TRADES_LABEL = Component.translatable("merchant.trades");
 
 	KubeUITradeExecuteScreen(KubeUITradeExecuteMenu menu, Inventory inventory, Component title) {
-		super(menu, inventory, title, 276, 166);
+		super(menu, inventory, title);
+		this.imageWidth = 276;
+		this.imageHeight = 166;
 		this.inventoryLabelX = 108;
+		this.inventoryLabelY = this.imageHeight - 94;
 	}
 
 	@Override
-	protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+	protected void renderLabels(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY) {
+		var graphics = new GuiGraphicsExtractor(realGraphics);
 		graphics.centeredText(this.font, this.title, 49 + this.imageWidth / 2, 6, KubeUITheme.titleColor());
 		graphics.text(this.font, this.playerInventoryTitle, this.inventoryLabelX, this.inventoryLabelY, KubeUITheme.textColor(), false);
 		graphics.centeredText(this.font, TRADES_LABEL, 53, 6, KubeUITheme.titleColor());
 	}
 
+	/// Draws the panel, the trade-list/payment divider, every slot's frame, and both arrows - all
+	/// in this one hook rather than split across a background pass and a separate post-slots pass,
+	/// since 1.21.1's `AbstractContainerScreen` has no override point between "background" and
+	/// "vanilla draws the real item icons" other than this one. Frames/arrows *must* draw here
+	/// (before the item-slot loop in the real `render()`), not after it, or the frame fill would
+	/// paint directly over the item icons instead of behind them.
 	@Override
-	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
-		super.extractBackground(graphics, mouseX, mouseY, a);
+	protected void renderBg(net.minecraft.client.gui.GuiGraphics realGraphics, float a, int mouseX, int mouseY) {
+		var graphics = new GuiGraphicsExtractor(realGraphics);
 		KubeUIPanelBackground.draw(graphics, KubeUIPanelTextures.TRADER_DESIGNER, this.leftPos, this.topPos, this.imageWidth, this.imageHeight);
-	}
 
-	@Override
-	public void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		// A thin divider between the trade-list column and the payment/result slots - real vanilla
 		// draws a scrollbar track there instead (no scrolling is implemented here, so it would
 		// always show as permanently "disabled" - a custom-drawn divider says the same thing
@@ -73,8 +79,6 @@ final class KubeUITradeExecuteScreen extends AbstractContainerScreen<KubeUITrade
 		// Cost2 slot spans x=162..178, result slot starts at x=220 - centered in that 42px gap.
 		// Vertically: slot top is y=37, same slot-top-plus-3px rule as the preview rows above.
 		graphics.centeredText(this.font, "->", this.leftPos + 199, this.topPos + 37 + 3, KubeUITheme.accentColor());
-
-		super.extractContents(graphics, mouseX, mouseY, a);
 	}
 
 	/// One real `Slot`'s worth of frame - a recessed dark square with a thin border, drawn at that

@@ -1,6 +1,6 @@
 package dev.kubeui.gui;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /// Real, custom-drawn nine-slice panel textures for the mod's other built-in screens (see
 /// [KubeUIQuestTheme] for the quest system's own, parchment-styled one) - same dark charcoal
@@ -11,10 +11,10 @@ import net.minecraft.resources.Identifier;
 /// screens - [KubeUIScreenBuilder#windowBackground], a real panel [KubeUIScreen] draws behind the
 /// whole screen, not a normal-flow widget.
 final class KubeUIPanelTextures {
-	static final Identifier RECIPE_DESIGNER = Identifier.fromNamespaceAndPath("kubeui", "textures/gui/recipe_panel.png");
-	static final Identifier TRADER_DESIGNER = Identifier.fromNamespaceAndPath("kubeui", "textures/gui/trader_panel.png");
-	static final Identifier FILE_EDITOR = Identifier.fromNamespaceAndPath("kubeui", "textures/gui/editor_panel.png");
-	static final Identifier RECIPE_BROWSER = Identifier.fromNamespaceAndPath("kubeui", "textures/gui/browser_panel.png");
+	static final ResourceLocation RECIPE_DESIGNER = ResourceLocation.fromNamespaceAndPath("kubeui", "textures/gui/recipe_panel.png");
+	static final ResourceLocation TRADER_DESIGNER = ResourceLocation.fromNamespaceAndPath("kubeui", "textures/gui/trader_panel.png");
+	static final ResourceLocation FILE_EDITOR = ResourceLocation.fromNamespaceAndPath("kubeui", "textures/gui/editor_panel.png");
+	static final ResourceLocation RECIPE_BROWSER = ResourceLocation.fromNamespaceAndPath("kubeui", "textures/gui/browser_panel.png");
 
 	private KubeUIPanelTextures() {
 	}

@@ -1,11 +1,9 @@
 package dev.kubeui.gui;
 
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
@@ -16,6 +14,7 @@ import java.util.function.Consumer;
 /// multiple runs) - KubeUI just lays the result out and wraps it, it doesn't invent its own
 /// styling API for this.
 class KubeUIRichText extends AbstractWidget implements KubeUINarratable {
+	private final DoubleClickTracker doubleClickTracker = new DoubleClickTracker();
 	private final Font font;
 	private final Consumer<MouseButtonEvent> onClick;
 	private final Integer styleColor;
@@ -39,6 +38,10 @@ class KubeUIRichText extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	public void onClick(double mouseX, double mouseY, int button) {
+		onClick(new MouseButtonEvent(mouseX, mouseY, button), doubleClickTracker.registerClick(mouseX, mouseY));
+	}
+
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
 		if (onClick != null) {
 			onClick.accept(event);
@@ -46,6 +49,10 @@ class KubeUIRichText extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	protected void renderWidget(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		extractWidgetRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
+	}
+
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		if (active && isHovered()) {
 			graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0x30FFFFFF);

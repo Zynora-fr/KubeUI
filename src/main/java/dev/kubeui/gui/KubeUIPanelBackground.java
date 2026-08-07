@@ -1,12 +1,10 @@
 package dev.kubeui.gui;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /// A nine-patch/nine-slice background (`.panelBackground(texture, width, height)`):
 /// corners drawn at fixed size, edges stretched along one axis, the center stretched both ways -
@@ -30,10 +28,10 @@ class KubeUIPanelBackground extends AbstractWidget implements KubeUINarratable {
 	private static final int BORDER_SRC = 20;
 	private static final int BORDER_DST = 10;
 
-	private final Identifier texture;
+	private final ResourceLocation texture;
 	private String narration;
 
-	KubeUIPanelBackground(int x, int y, int width, int height, Identifier texture) {
+	KubeUIPanelBackground(int x, int y, int width, int height, ResourceLocation texture) {
 		super(x, y, width, height, Component.empty());
 		this.texture = texture;
 		this.active = false;
@@ -45,6 +43,10 @@ class KubeUIPanelBackground extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	protected void renderWidget(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		extractWidgetRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
+	}
+
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		draw(graphics, texture, getX(), getY(), getWidth(), getHeight());
 	}
@@ -55,7 +57,7 @@ class KubeUIPanelBackground extends AbstractWidget implements KubeUINarratable {
 	/// edge-thickness regions scale their `BORDER_SRC`-sized source crop down to the smaller `b`
 	/// screen size, same as the edge regions already scale their source *length* up to an
 	/// arbitrary screen length - one real blit call handles both directions of mismatch identically.
-	static void draw(GuiGraphicsExtractor graphics, Identifier texture, int x, int y, int w, int h) {
+	static void draw(GuiGraphicsExtractor graphics, ResourceLocation texture, int x, int y, int w, int h) {
 		int b = Math.min(BORDER_DST, Math.min(w, h) / 2);
 		int innerW = Math.max(0, w - b * 2);
 		int innerH = Math.max(0, h - b * 2);
@@ -83,7 +85,7 @@ class KubeUIPanelBackground extends AbstractWidget implements KubeUINarratable {
 		}
 	}
 
-	private static void blitRegion(GuiGraphicsExtractor graphics, Identifier texture, int x, int y, int width, int height, int u, int v, int srcWidth, int srcHeight) {
+	private static void blitRegion(GuiGraphicsExtractor graphics, ResourceLocation texture, int x, int y, int width, int height, int u, int v, int srcWidth, int srcHeight) {
 		if (width <= 0 || height <= 0) {
 			return;
 		}

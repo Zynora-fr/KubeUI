@@ -103,10 +103,10 @@ final class KubeUIQuestGiverInteraction {
 		tag.putString("type", reward.type());
 		switch (reward.type()) {
 			case "item" -> {
-				tag.putString("item", reward.data().getStringOr("item", ""));
-				tag.putInt("count", reward.data().getIntOr("count", 1));
+				tag.putString("item", KubeUINbtCompat.getStringOr(reward.data(), "item", ""));
+				tag.putInt("count", KubeUINbtCompat.getIntOr(reward.data(), "count", 1));
 			}
-			case "xp" -> tag.putInt("levels", reward.data().getIntOr("levels", 0));
+			case "xp" -> tag.putInt("levels", KubeUINbtCompat.getIntOr(reward.data(), "levels", 0));
 			case "command" -> tag.putString("label", "Special reward");
 			default -> {
 			}

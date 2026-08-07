@@ -2,7 +2,6 @@ package dev.kubeui.gui;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
@@ -98,7 +97,7 @@ class KubeUIMinimap extends AbstractWidget implements KubeUINarratable {
 				int topY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, worldX, worldZ);
 				pos.set(worldX, topY - 1, worldZ);
 				MapColor color = level.getBlockState(pos).getMapColor(level, pos);
-				cells[gz * GRID + gx] = color == MapColor.NONE ? 0xFF1E1E1E : color.calculateARGBColor(MapColor.Brightness.NORMAL);
+				cells[gz * GRID + gx] = color == MapColor.NONE ? 0xFF1E1E1E : color.calculateRGBColor(MapColor.Brightness.NORMAL);
 			}
 		}
 	}
@@ -109,6 +108,10 @@ class KubeUIMinimap extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	protected void renderWidget(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		extractWidgetRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
+	}
+
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		float cellWidth = getWidth() / (float) GRID;
 		float cellHeight = getHeight() / (float) GRID;

@@ -20,11 +20,11 @@ final class KubeUIQuestGiverScreen {
 	}
 
 	static void receive(CompoundTag data) {
-		giverUuid = data.getStringOr("giverUuid", "");
-		giverName = data.getStringOr("giverName", "Quest Giver");
+		giverUuid = KubeUINbtCompat.getStringOr(data, "giverUuid", "");
+		giverName = KubeUINbtCompat.getStringOr(data, "giverName", "Quest Giver");
 
 		var list = new ArrayList<CompoundTag>();
-		for (var entry : data.getListOrEmpty("quests")) {
+		for (var entry : data.getList("quests", 10)) {
 			if (entry instanceof CompoundTag tag) {
 				list.add(tag);
 			}
@@ -61,10 +61,10 @@ final class KubeUIQuestGiverScreen {
 	}
 
 	private static void appendQuestRow(KubeUIScreenBuilder panel, CompoundTag quest, int totalWidth) {
-		String id = quest.getStringOr("id", "");
-		String title = quest.getStringOr("title", id);
-		String description = quest.getStringOr("description", "");
-		String status = quest.getStringOr("status", "locked");
+		String id = KubeUINbtCompat.getStringOr(quest, "id", "");
+		String title = KubeUINbtCompat.getStringOr(quest, "title", id);
+		String description = KubeUINbtCompat.getStringOr(quest, "description", "");
+		String status = KubeUINbtCompat.getStringOr(quest, "status", "locked");
 
 		panel.label("title_" + id, title);
 		if (!description.isEmpty()) {
@@ -74,19 +74,19 @@ final class KubeUIQuestGiverScreen {
 		if ("locked".equals(status)) {
 			panel.label("locked_" + id, "  Requires another quest to be completed first.");
 		} else {
-			for (var entry : quest.getListOrEmpty("objectives")) {
+			for (var entry : quest.getList("objectives", 10)) {
 				if (entry instanceof CompoundTag objectiveTag) {
-					String label = objectiveTag.getStringOr("label", "");
-					int target = objectiveTag.getIntOr("target", 1);
+					String label = KubeUINbtCompat.getStringOr(objectiveTag, "label", "");
+					int target = KubeUINbtCompat.getIntOr(objectiveTag, "target", 1);
 					if ("active".equals(status) || "readyToComplete".equals(status)) {
-						int progress = objectiveTag.getIntOr("progress", 0);
+						int progress = KubeUINbtCompat.getIntOr(objectiveTag, "progress", 0);
 						panel.label("obj_" + id + "_" + label.hashCode(), "  - " + label + ": " + progress + "/" + target);
 					} else {
 						panel.label("obj_" + id + "_" + label.hashCode(), "  - " + label + " (" + target + ")");
 					}
 				}
 			}
-			for (var entry : quest.getListOrEmpty("rewards")) {
+			for (var entry : quest.getList("rewards", 10)) {
 				if (entry instanceof CompoundTag rewardTag) {
 					panel.label("reward_" + id + "_" + entry.hashCode(), "  Reward: " + describeReward(rewardTag));
 				}
@@ -106,10 +106,10 @@ final class KubeUIQuestGiverScreen {
 	}
 
 	private static String describeReward(CompoundTag rewardTag) {
-		return switch (rewardTag.getStringOr("type", "")) {
-			case "item" -> rewardTag.getIntOr("count", 1) + "x " + shortId(rewardTag.getStringOr("item", ""));
-			case "xp" -> rewardTag.getIntOr("levels", 0) + " XP level(s)";
-			default -> rewardTag.getStringOr("label", "Special reward");
+		return switch (KubeUINbtCompat.getStringOr(rewardTag, "type", "")) {
+			case "item" -> KubeUINbtCompat.getIntOr(rewardTag, "count", 1) + "x " + shortId(KubeUINbtCompat.getStringOr(rewardTag, "item", ""));
+			case "xp" -> KubeUINbtCompat.getIntOr(rewardTag, "levels", 0) + " XP level(s)";
+			default -> KubeUINbtCompat.getStringOr(rewardTag, "label", "Special reward");
 		};
 	}
 

@@ -33,7 +33,11 @@ class KubeUISlider extends AbstractSliderButton {
 	}
 
 	void setCurrentValue(double newValue) {
-		setValue(toNormalized(min, max, newValue));
+		// AbstractSliderButton#setValue is private in 1.21.1 - this replicates its real body
+		// (clamp, then the same applyValue/updateMessage a real setValue call would trigger).
+		this.value = net.minecraft.util.Mth.clamp(toNormalized(min, max, newValue), 0.0, 1.0);
+		applyValue();
+		updateMessage();
 	}
 
 	@Override

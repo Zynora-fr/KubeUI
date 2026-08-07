@@ -1,6 +1,5 @@
 package dev.kubeui.gui;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
@@ -35,13 +34,17 @@ class KubeUIEntityPreview extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	protected void renderWidget(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		extractWidgetRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
+	}
+
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		int size = Math.min(getWidth(), getHeight()) * 4 / 5;
 		// xAngle/yAngle are radians (same unit `Math.atan(...)` produces for the vanilla
 		// mouse-following variant of this call) - a fixed mild turn gives a static three-quarter
 		// view instead of a flat front-on one.
 		InventoryScreen.renderEntityInInventoryFollowsAngle(
-			graphics, getX(), getY(), getX() + getWidth(), getY() + getHeight(), size, 0.0F, 0.4F, 0.1F, entity
+			graphics.real(), getX(), getY(), getX() + getWidth(), getY() + getHeight(), size, 0.0F, 0.4F, 0.1F, entity
 		);
 	}
 

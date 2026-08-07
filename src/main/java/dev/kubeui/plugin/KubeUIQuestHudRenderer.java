@@ -49,20 +49,20 @@ final class KubeUIQuestHudRenderer {
 		int x = MARGIN;
 		int y = MARGIN;
 		graphics.fill(x, y, x + boxWidth, y + boxHeight, 0xC0202020);
-		graphics.outline(x, y, boxWidth, boxHeight, 0xFF45D6C9);
+		graphics.renderOutline(x, y, boxWidth, boxHeight, 0xFF45D6C9);
 
 		int textY = y + PADDING;
-		graphics.text(font, title, x + PADDING, textY, 0xFFFFD700, false);
+		graphics.drawString(font, title, x + PADDING, textY, 0xFFFFD700, false);
 		textY += lineHeight;
 
 		for (var objective : objectives) {
 			int color = objective.progress() >= objective.target() ? 0xFF55FF55 : 0xFFDDDDDD;
-			graphics.text(font, objectiveLine(objective), x + PADDING, textY, color, false);
+			graphics.drawString(font, objectiveLine(objective), x + PADDING, textY, color, false);
 			textY += lineHeight;
 		}
 
 		if (canComplete) {
-			graphics.text(font, READY_TEXT, x + PADDING, textY, 0xFF55FF55, false);
+			graphics.drawString(font, READY_TEXT, x + PADDING, textY, 0xFF55FF55, false);
 		}
 	}
 

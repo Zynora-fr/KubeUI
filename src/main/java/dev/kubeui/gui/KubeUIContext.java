@@ -82,7 +82,7 @@ public class KubeUIContext {
 	public void setToggleValue(String id, boolean value) {
 		var widget = screen.toggles.get(id);
 		if (widget != null && widget.selected() != value) {
-			widget.onPress(null);
+			widget.onPress();
 		}
 	}
 

@@ -39,8 +39,8 @@ final class KubeUIToastRenderer {
 			int x = graphics.guiWidth() - MARGIN - boxWidth;
 
 			graphics.fill(x, y, x + boxWidth, y + boxHeight, 0xE0202020);
-			graphics.outline(x, y, boxWidth, boxHeight, 0xFF45D6C9);
-			graphics.text(font, toast.message(), x + PADDING_X, y + (boxHeight - font.lineHeight) / 2 + 1, 0xFFFFFFFF, false);
+			graphics.renderOutline(x, y, boxWidth, boxHeight, 0xFF45D6C9);
+			graphics.drawString(font, toast.message(), x + PADDING_X, y + (boxHeight - font.lineHeight) / 2 + 1, 0xFFFFFFFF, false);
 
 			y += boxHeight + GAP;
 		}

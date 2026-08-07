@@ -5,7 +5,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -64,8 +64,8 @@ final class KubeUINetworking {
 		String action = payload.action();
 
 		if (KubeUIActions.SCREEN_STATE_ACTION.equals(action)) {
-			String screenId = payload.data().getStringOr("screenId", null);
-			boolean open = payload.data().getBooleanOr("open", false);
+			String screenId = KubeUINbtCompat.getStringOr(payload.data(), "screenId", null);
+			boolean open = KubeUINbtCompat.getBooleanOr(payload.data(), "open", false);
 			KubeUIActions.setOpenScreen(player, open ? screenId : null);
 			return true;
 		}
@@ -76,7 +76,7 @@ final class KubeUINetworking {
 		}
 
 		if (KubeUIActions.RECIPE_QUERY_TYPE_ACTION.equals(action)) {
-			String recipeTypeId = payload.data().getStringOr("value", "");
+			String recipeTypeId = KubeUINbtCompat.getStringOr(payload.data(), "value", "");
 			var results = KubeUIRecipeQuery.queryByType(player, recipeTypeId);
 			var reply = new CompoundTag();
 			reply.put("recipes", results);
@@ -85,7 +85,7 @@ final class KubeUINetworking {
 		}
 
 		if (KubeUIActions.RECIPE_QUERY_ITEM_ACTION.equals(action)) {
-			String itemId = payload.data().getStringOr("value", "");
+			String itemId = KubeUINbtCompat.getStringOr(payload.data(), "value", "");
 			var results = KubeUIRecipeQuery.queryByItem(player, itemId);
 			var reply = new CompoundTag();
 			reply.put("recipes", results);
@@ -99,13 +99,13 @@ final class KubeUINetworking {
 		}
 
 		if (KubeUIActions.RECIPE_DESIGNER_OPEN_GRID_ACTION.equals(action)) {
-			String kind = payload.data().getStringOr("kind", "shapeless");
+			String kind = KubeUINbtCompat.getStringOr(payload.data(), "kind", "shapeless");
 			KubeUIRecipeDesignerGrid.open(player, kind);
 			return true;
 		}
 
 		if (KubeUIActions.RECIPE_DESIGNER_DELETE_ACTION.equals(action)) {
-			String name = payload.data().getStringOr("name", "");
+			String name = KubeUINbtCompat.getStringOr(payload.data(), "name", "");
 			KubeUIRecipeDesigner.delete(name, player);
 			sendRecipeDesignerList(player);
 			return true;
@@ -127,15 +127,15 @@ final class KubeUINetworking {
 		}
 
 		if (KubeUIActions.TRADER_DESIGNER_REMOVE_TRADE_ACTION.equals(action)) {
-			int index = payload.data().getIntOr("index", -1);
+			int index = KubeUINbtCompat.getIntOr(payload.data(), "index", -1);
 			KubeUITraderDesigner.removeTrade(player, index);
 			sendTraderDesignerList(player);
 			return true;
 		}
 
 		if (KubeUIActions.TRADER_DESIGNER_SET_FLAGS_ACTION.equals(action)) {
-			boolean hasAI = payload.data().getBooleanOr("hasAI", true);
-			boolean canMove = payload.data().getBooleanOr("canMove", true);
+			boolean hasAI = KubeUINbtCompat.getBooleanOr(payload.data(), "hasAI", true);
+			boolean canMove = KubeUINbtCompat.getBooleanOr(payload.data(), "canMove", true);
 			KubeUITraderDesigner.setFlags(player, hasAI, canMove);
 			sendTraderDesignerList(player);
 			return true;
@@ -153,7 +153,7 @@ final class KubeUINetworking {
 		}
 
 		if (KubeUIActions.QUEST_TRACK_ACTION.equals(action)) {
-			String questId = payload.data().getStringOr("questId", "");
+			String questId = KubeUINbtCompat.getStringOr(payload.data(), "questId", "");
 			KubeUIQuests.setTrackedQuest(player, questId);
 			if (!questId.isEmpty()) {
 				KubeUIQuestEvents.pushHudUpdate(player);
@@ -172,12 +172,12 @@ final class KubeUINetworking {
 		}
 
 		if (KubeUIActions.QUEST_COMMAND_ACCEPT_ACTION.equals(action)) {
-			handleQuestCommand(player, payload.data().getStringOr("questId", ""), true);
+			handleQuestCommand(player, KubeUINbtCompat.getStringOr(payload.data(), "questId", ""), true);
 			return true;
 		}
 
 		if (KubeUIActions.QUEST_COMMAND_COMPLETE_ACTION.equals(action)) {
-			handleQuestCommand(player, payload.data().getStringOr("questId", ""), false);
+			handleQuestCommand(player, KubeUINbtCompat.getStringOr(payload.data(), "questId", ""), false);
 			return true;
 		}
 
@@ -194,7 +194,7 @@ final class KubeUINetworking {
 		}
 
 		if (KubeUIActions.QUEST_EDITOR_DELETE_ACTION.equals(action)) {
-			String questId = payload.data().getStringOr("questId", "");
+			String questId = KubeUINbtCompat.getStringOr(payload.data(), "questId", "");
 			KubeUIQuests.deleteEditorQuest(player.level().getServer(), questId);
 			sendQuestEditorList(player);
 			return true;
@@ -232,8 +232,8 @@ final class KubeUINetworking {
 	/// payload type for what's still fundamentally "server tells this one client something".
 	private static void handlePermissionCheck(ServerPlayer player, CompoundTag data) {
 		var results = new CompoundTag();
-		for (var tag : data.getListOrEmpty("gates")) {
-			tag.asString().ifPresent(gate -> results.putBoolean(gate, KubeUIPermissions.check(player, gate)));
+		for (var tag : data.getList("gates", 8)) {
+			results.putBoolean(tag.getAsString(), KubeUIPermissions.check(player, tag.getAsString()));
 		}
 		PacketDistributor.sendToPlayer(player, new KubeUIRemotePayload(KubeUIActions.PERMISSION_RESULT_SCREEN_ID, results));
 	}
@@ -276,7 +276,7 @@ final class KubeUINetworking {
 	/// resolvable (unloaded, despawned since the screen opened), the state change still happens -
 	/// only the follow-up screen refresh is skipped, since there's nothing left to refresh from.
 	private static void handleQuestGiverAction(ServerPlayer player, CompoundTag data, boolean accept) {
-		String questId = data.getStringOr("questId", "");
+		String questId = KubeUINbtCompat.getStringOr(data, "questId", "");
 		if (accept) {
 			KubeUIQuests.accept(player, questId);
 		} else {
@@ -284,8 +284,8 @@ final class KubeUINetworking {
 		}
 
 		try {
-			var giverUuid = java.util.UUID.fromString(data.getStringOr("giverUuid", ""));
-			var giver = player.level().getEntity(giverUuid);
+			var giverUuid = java.util.UUID.fromString(KubeUINbtCompat.getStringOr(data, "giverUuid", ""));
+			var giver = player.serverLevel().getEntity(giverUuid);
 			if (giver != null) {
 				KubeUIQuestGiverInteraction.sendGiverScreen(player, giver);
 			}
@@ -354,21 +354,21 @@ final class KubeUINetworking {
 			if (KubeUIActions.PERMISSION_RESULT_SCREEN_ID.equals(payload.screenId())) {
 				KubeUIScreen.receivePermissionResults(payload.data());
 			} else if (KubeUIActions.SIDEBAR_VISIBILITY_SCREEN_ID.equals(payload.screenId())) {
-				String iconId = payload.data().getStringOr("iconId", null);
-				boolean visible = payload.data().getBooleanOr("visible", true);
+				String iconId = KubeUINbtCompat.getStringOr(payload.data(), "iconId", null);
+				boolean visible = KubeUINbtCompat.getBooleanOr(payload.data(), "visible", true);
 				KubeUISidebar.setServerVisible(iconId, visible);
 			} else if (KubeUIActions.RECIPE_RESULT_TYPE_SCREEN_ID.equals(payload.screenId())) {
-				KubeUIRecipeBridge.receiveTypeResult(payload.data().getListOrEmpty("recipes"));
+				KubeUIRecipeBridge.receiveTypeResult(payload.data().getList("recipes", 10));
 			} else if (KubeUIActions.RECIPE_RESULT_ITEM_SCREEN_ID.equals(payload.screenId())) {
-				KubeUIRecipeBridge.receiveItemResult(payload.data().getListOrEmpty("recipes"));
+				KubeUIRecipeBridge.receiveItemResult(payload.data().getList("recipes", 10));
 			} else if (KubeUIActions.RECIPE_DESIGNER_RESULT_SCREEN_ID.equals(payload.screenId())) {
-				KubeUIRecipeDesignerScreen.receiveList(payload.data().getListOrEmpty("recipes"));
+				KubeUIRecipeDesignerScreen.receiveList(payload.data().getList("recipes", 10));
 			} else if (KubeUIActions.TRADER_DESIGNER_RESULT_SCREEN_ID.equals(payload.screenId())) {
 				KubeUITraderDesignerScreen.receiveList(payload.data());
 			} else if (KubeUIActions.QUEST_LOG_RESULT_SCREEN_ID.equals(payload.screenId())) {
-				KubeUIQuestLogScreen.receiveList(payload.data().getListOrEmpty("quests"));
+				KubeUIQuestLogScreen.receiveList(payload.data().getList("quests", 10));
 			} else if (KubeUIActions.QUEST_EDITOR_RESULT_SCREEN_ID.equals(payload.screenId())) {
-				KubeUIQuestEditorScreen.receiveList(payload.data().getListOrEmpty("quests"));
+				KubeUIQuestEditorScreen.receiveList(payload.data().getList("quests", 10));
 			} else if (KubeUIActions.QUEST_GIVER_RESULT_SCREEN_ID.equals(payload.screenId())) {
 				KubeUIQuestGiverScreen.receive(payload.data());
 			} else if (KubeUIActions.QUEST_HUD_UPDATE_SCREEN_ID.equals(payload.screenId())) {
@@ -393,7 +393,7 @@ final class KubeUINetworking {
 	}
 
 	static void sendAction(String action, CompoundTag data) {
-		ClientPacketDistributor.sendToServer(new KubeUIActionPayload(action, data == null ? new CompoundTag() : data));
+		PacketDistributor.sendToServer(new KubeUIActionPayload(action, data == null ? new CompoundTag() : data));
 	}
 
 	/// A server that never replies to a `runServerAction(..., onAck)` call (doesn't implement that
@@ -411,13 +411,13 @@ final class KubeUINetworking {
 				"KubeUI: {}+ runServerAction(..., onAck) calls are still awaiting a reply - the server may not be replying to '{}' at all. Dropping this onAck instead of growing forever.",
 				MAX_PENDING_ACKS, action
 			);
-			ClientPacketDistributor.sendToServer(new KubeUIActionPayload(action, data == null ? new CompoundTag() : data));
+			PacketDistributor.sendToServer(new KubeUIActionPayload(action, data == null ? new CompoundTag() : data));
 			return;
 		}
 
 		int requestId = NEXT_REQUEST_ID.getAndIncrement();
 		PENDING_ACKS.put(requestId, onAck);
-		ClientPacketDistributor.sendToServer(new KubeUIActionPayload(action, data == null ? new CompoundTag() : data, requestId));
+		PacketDistributor.sendToServer(new KubeUIActionPayload(action, data == null ? new CompoundTag() : data, requestId));
 	}
 
 	/// Sent automatically by `KubeUIScreen` (never by scripts) when a `.screenId(id)`-tagged screen

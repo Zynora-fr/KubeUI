@@ -5,8 +5,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.component.CustomData;
@@ -43,7 +43,7 @@ final class KubeUITraderEggItem extends Item {
 
 		var stack = context.getItemInHand();
 		var tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
-		var tradesTag = tag.getListOrEmpty("trades");
+		var tradesTag = tag.getList("trades", 10);
 		if (tradesTag.isEmpty()) {
 			player.sendSystemMessage(Component.literal("This trader egg has no trades baked in - it can't be used."));
 			return InteractionResult.FAIL;
@@ -55,7 +55,7 @@ final class KubeUITraderEggItem extends Item {
 		var spawnPos = blockState.getCollisionShape(level, pos).isEmpty() ? pos : pos.relative(clickedFace);
 
 		var villager = EntityType.VILLAGER.spawn(
-			serverLevel, stack, player, spawnPos, EntitySpawnReason.SPAWN_ITEM_USE, true, clickedFace == net.minecraft.core.Direction.UP
+			serverLevel, stack, player, spawnPos, MobSpawnType.SPAWN_EGG, true, clickedFace == net.minecraft.core.Direction.UP
 		);
 		if (villager == null) {
 			return InteractionResult.FAIL;
@@ -70,8 +70,8 @@ final class KubeUITraderEggItem extends Item {
 
 		KubeUIVillagerTrades.tagInlineTrades(villager, trades);
 
-		boolean hasAI = tag.getBooleanOr("hasAI", true);
-		boolean canMove = tag.getBooleanOr("canMove", true);
+		boolean hasAI = KubeUINbtCompat.getBooleanOr(tag, "hasAI", true);
+		boolean canMove = KubeUINbtCompat.getBooleanOr(tag, "canMove", true);
 		villager.setNoAi(!hasAI);
 		if (!canMove) {
 			var speed = villager.getAttribute(Attributes.MOVEMENT_SPEED);

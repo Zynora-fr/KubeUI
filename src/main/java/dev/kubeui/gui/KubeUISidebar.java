@@ -3,7 +3,7 @@ package dev.kubeui.gui;
 import dev.kubeui.KubeUI;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 
 import java.util.ArrayList;
@@ -34,7 +34,7 @@ public final class KubeUISidebar {
 	/// Per-icon-id texture overrides (see [#setIconPack]) - checked before an icon's own
 	/// item/texture, so a resource pack (or a script standing in for one) can reskin the whole bar
 	/// in one call without every addon that registered an icon needing to cooperate.
-	private static final Map<String, Identifier> ICON_PACK = new HashMap<>();
+	private static final Map<String, ResourceLocation> ICON_PACK = new HashMap<>();
 
 	/// Icon ids the server explicitly hid for this player (see [#setServerVisible]) - absence means
 	/// visible, the same "opt-in to hide, not opt-in to show" default `.requirePermission(...)`
@@ -51,7 +51,7 @@ public final class KubeUISidebar {
 	/// [#addTexture] - for reskinning the whole bar to match a resource pack in one call, without
 	/// every addon that registered an icon needing to cooperate. An id with no override keeps
 	/// rendering whatever it was registered with. Replaces any previous pack entirely (not merged).
-	public static void setIconPack(Map<String, Identifier> overrides) {
+	public static void setIconPack(Map<String, ResourceLocation> overrides) {
 		ICON_PACK.clear();
 		if (overrides != null) {
 			ICON_PACK.putAll(overrides);
@@ -75,7 +75,7 @@ public final class KubeUISidebar {
 	}
 
 	/// Same as [#addItem], but rendered from a custom resource-pack texture instead of an item.
-	public static void addTexture(String id, Identifier texture, String tooltip, Runnable onClick) {
+	public static void addTexture(String id, ResourceLocation texture, String tooltip, Runnable onClick) {
 		if (id == null || texture == null || onClick == null) {
 			KubeUI.LOGGER.error("KubeUISidebar.addTexture needs a non-null id, texture and onClick - ignoring (id={})", id);
 			return;

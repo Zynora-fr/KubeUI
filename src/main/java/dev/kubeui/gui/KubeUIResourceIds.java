@@ -1,7 +1,7 @@
 package dev.kubeui.gui;
 
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +24,7 @@ final class KubeUIResourceIds {
 		};
 	}
 
-	private static List<String> idsOf(java.util.Set<Identifier> ids) {
+	private static List<String> idsOf(java.util.Set<ResourceLocation> ids) {
 		var list = new ArrayList<String>(ids.size());
 		for (var id : ids) {
 			list.add(id.toString());

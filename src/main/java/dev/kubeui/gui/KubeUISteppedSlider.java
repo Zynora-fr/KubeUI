@@ -39,7 +39,11 @@ class KubeUISteppedSlider extends AbstractSliderButton {
 	void setCurrentStep(String step) {
 		int index = steps.indexOf(step);
 		if (index >= 0) {
-			setValue(normalizedFor(steps, step));
+			// AbstractSliderButton#setValue is private in 1.21.1 - this replicates its real body
+			// (clamp, then the same applyValue/updateMessage a real setValue call would trigger).
+			this.value = net.minecraft.util.Mth.clamp(normalizedFor(steps, step), 0.0, 1.0);
+			applyValue();
+			updateMessage();
 		}
 	}
 

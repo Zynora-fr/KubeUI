@@ -111,7 +111,7 @@ jobs:
           modrinth-id: 43NbktDJ
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           loaders: neoforge
-          game-versions: '26.1.2'
+          game-versions: '1.21.1'
           version: ${{ steps.version.outputs.version }}
           name: KubeUI ${{ steps.version.outputs.version }}
           version-type: release
@@ -160,7 +160,7 @@ jobs:
           curseforge-id: '1635257'
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
           loaders: neoforge
-          game-versions: '26.1.2'
+          game-versions: '1.21.1'
           version: ${{ steps.version.outputs.version }}
           name: KubeUI ${{ steps.version.outputs.version }}
           version-type: release

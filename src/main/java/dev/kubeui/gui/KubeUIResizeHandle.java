@@ -1,10 +1,8 @@
 package dev.kubeui.gui;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.DoubleConsumer;
@@ -20,11 +18,19 @@ class KubeUIResizeHandle extends AbstractWidget {
 	}
 
 	@Override
+	protected void onDrag(double mouseX, double mouseY, double dx, double dy) {
+		onDrag(new MouseButtonEvent(mouseX, mouseY, 0), dx, dy);
+	}
+
 	protected void onDrag(MouseButtonEvent event, double dx, double dy) {
 		onDragY.accept(dy);
 	}
 
 	@Override
+	protected void renderWidget(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		extractWidgetRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
+	}
+
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		int x0 = getX();
 		int y0 = getY();

@@ -2,7 +2,7 @@ package dev.kubeui.gui;
 
 import dev.kubeui.KubeUI;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -18,12 +18,12 @@ final class KubeUIRecipeGridScreenHook {
 	private KubeUIRecipeGridScreenHook() {
 	}
 
-	private static final Identifier CRAFTING_TABLE = Identifier.withDefaultNamespace("textures/gui/container/crafting_table.png");
-	private static final Identifier FURNACE = Identifier.withDefaultNamespace("textures/gui/container/furnace.png");
-	private static final Identifier BLAST_FURNACE = Identifier.withDefaultNamespace("textures/gui/container/blast_furnace.png");
-	private static final Identifier SMOKER = Identifier.withDefaultNamespace("textures/gui/container/smoker.png");
-	private static final Identifier STONECUTTER = Identifier.withDefaultNamespace("textures/gui/container/stonecutter.png");
-	private static final Identifier SMITHING = Identifier.withDefaultNamespace("textures/gui/container/smithing.png");
+	private static final ResourceLocation CRAFTING_TABLE = ResourceLocation.withDefaultNamespace("textures/gui/container/crafting_table.png");
+	private static final ResourceLocation FURNACE = ResourceLocation.withDefaultNamespace("textures/gui/container/furnace.png");
+	private static final ResourceLocation BLAST_FURNACE = ResourceLocation.withDefaultNamespace("textures/gui/container/blast_furnace.png");
+	private static final ResourceLocation SMOKER = ResourceLocation.withDefaultNamespace("textures/gui/container/smoker.png");
+	private static final ResourceLocation STONECUTTER = ResourceLocation.withDefaultNamespace("textures/gui/container/stonecutter.png");
+	private static final ResourceLocation SMITHING = ResourceLocation.withDefaultNamespace("textures/gui/container/smithing.png");
 
 	@SubscribeEvent
 	static void onRegisterScreens(RegisterMenuScreensEvent event) {

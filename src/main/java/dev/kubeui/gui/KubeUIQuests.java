@@ -7,12 +7,11 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.StringTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.LevelBasedPermissionSet;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -95,43 +94,27 @@ final class KubeUIQuests {
 
 	private static CompoundTag progressRoot(ServerPlayer player) {
 		var root = player.getPersistentData();
-		return root.getCompound(PROGRESS_TAG_KEY).orElseGet(() -> {
-			var created = new CompoundTag();
-			root.put(PROGRESS_TAG_KEY, created);
-			return created;
-		});
+		return KubeUINbtCompat.getCompoundOrCreate(root, PROGRESS_TAG_KEY);
 	}
 
 	private static CompoundTag questEntry(ServerPlayer player, String questId) {
 		var root = progressRoot(player);
-		return root.getCompound(questId).orElseGet(() -> {
-			var created = new CompoundTag();
-			root.put(questId, created);
-			return created;
-		});
+		return KubeUINbtCompat.getCompoundOrCreate(root, questId);
 	}
 
 	private static CompoundTag counters(ServerPlayer player, String questId) {
 		var entry = questEntry(player, questId);
-		return entry.getCompound("counters").orElseGet(() -> {
-			var created = new CompoundTag();
-			entry.put("counters", created);
-			return created;
-		});
+		return KubeUINbtCompat.getCompoundOrCreate(entry, "counters");
 	}
 
 	private static CompoundTag visited(ServerPlayer player, String questId) {
 		var entry = questEntry(player, questId);
-		return entry.getCompound("visited").orElseGet(() -> {
-			var created = new CompoundTag();
-			entry.put("visited", created);
-			return created;
-		});
+		return KubeUINbtCompat.getCompoundOrCreate(entry, "visited");
 	}
 
 	/// `""` (never started), `"active"`, or `"completed"`.
 	static String state(ServerPlayer player, String questId) {
-		return progressRoot(player).getCompound(questId).map(c -> c.getStringOr("state", "")).orElse("");
+		return KubeUINbtCompat.getStringOr(progressRoot(player).getCompound(questId), "state", "");
 	}
 
 	static boolean prerequisitesMet(ServerPlayer player, KubeUIQuestDef def) {
@@ -167,7 +150,7 @@ final class KubeUIQuests {
 			return 0;
 		}
 		int total = 0;
-		for (var stack : player.getInventory().getNonEquipmentItems()) {
+		for (var stack : player.getInventory().items) {
 			if (stack.is(item)) {
 				total += stack.getCount();
 			}
@@ -176,7 +159,7 @@ final class KubeUIQuests {
 	}
 
 	private static int counter(ServerPlayer player, String questId, String objectiveId) {
-		return counters(player, questId).getIntOr(objectiveId, 0);
+		return KubeUINbtCompat.getIntOr(counters(player, questId), objectiveId, 0);
 	}
 
 	/// Bumps a generic, stored objective counter (used by both the built-in `"kill"` type, via
@@ -189,11 +172,11 @@ final class KubeUIQuests {
 			return;
 		}
 		var counters = counters(player, questId);
-		counters.putInt(objectiveId, counters.getIntOr(objectiveId, 0) + amount);
+		counters.putInt(objectiveId, KubeUINbtCompat.getIntOr(counters, objectiveId, 0) + amount);
 	}
 
 	static boolean isVisited(ServerPlayer player, String questId, String objectiveId) {
-		return visited(player, questId).getBooleanOr(objectiveId, false);
+		return KubeUINbtCompat.getBooleanOr(visited(player, questId), objectiveId, false);
 	}
 
 	static void markVisited(ServerPlayer player, String questId, String objectiveId) {
@@ -206,9 +189,9 @@ final class KubeUIQuests {
 	/// explicit position if both are somehow present; most objectives will only ever set one.
 	static boolean checkVisit(ServerPlayer player, KubeUIQuestObjective objective) {
 		var data = objective.data();
-		String structureTagId = data.getStringOr("structureTag", "");
+		String structureTagId = KubeUINbtCompat.getStringOr(data, "structureTag", "");
 		if (!structureTagId.isEmpty()) {
-			var identifier = Identifier.tryParse(structureTagId);
+			var identifier = ResourceLocation.tryParse(structureTagId);
 			if (identifier == null || !(player.level() instanceof ServerLevel serverLevel)) {
 				return false;
 			}
@@ -216,9 +199,9 @@ final class KubeUIQuests {
 			return serverLevel.structureManager().getStructureWithPieceAt(player.blockPosition(), tag).isValid();
 		}
 
-		String dimensionId = data.getStringOr("dimension", "");
+		String dimensionId = KubeUINbtCompat.getStringOr(data, "dimension", "");
 		if (!dimensionId.isEmpty()) {
-			var identifier = Identifier.tryParse(dimensionId);
+			var identifier = ResourceLocation.tryParse(dimensionId);
 			if (identifier == null) {
 				return false;
 			}
@@ -228,10 +211,10 @@ final class KubeUIQuests {
 			}
 		}
 
-		double x = data.getDoubleOr("x", 0.0);
-		double y = data.getDoubleOr("y", 0.0);
-		double z = data.getDoubleOr("z", 0.0);
-		double radius = Math.max(1.0, data.getDoubleOr("radius", 5.0));
+		double x = KubeUINbtCompat.getDoubleOr(data, "x", 0.0);
+		double y = KubeUINbtCompat.getDoubleOr(data, "y", 0.0);
+		double z = KubeUINbtCompat.getDoubleOr(data, "z", 0.0);
+		double radius = Math.max(1.0, KubeUINbtCompat.getDoubleOr(data, "radius", 5.0));
 		return player.distanceToSqr(x, y, z) <= radius * radius;
 	}
 
@@ -239,7 +222,7 @@ final class KubeUIQuests {
 	/// clamped to `[0, target]` regardless of type so callers never need their own bounds-checking.
 	static int objectiveProgress(ServerPlayer player, KubeUIQuestDef def, KubeUIQuestObjective objective) {
 		int raw = switch (objective.type()) {
-			case "collect" -> countHeldItems(player, objective.data().getStringOr("item", ""));
+			case "collect" -> countHeldItems(player, KubeUINbtCompat.getStringOr(objective.data(), "item", ""));
 			case "xpLevel" -> player.experienceLevel;
 			case "visit" -> isVisited(player, def.id(), objective.id()) ? objective.target() : 0;
 			default -> counter(player, def.id(), objective.id());
@@ -283,19 +266,19 @@ final class KubeUIQuests {
 		for (var reward : def.rewards()) {
 			switch (reward.type()) {
 				case "item" -> giveItem(player, reward.data());
-				case "xp" -> player.giveExperienceLevels(Math.max(0, reward.data().getIntOr("levels", 0)));
-				case "command" -> runCommand(player, reward.data().getStringOr("command", ""));
+				case "xp" -> player.giveExperienceLevels(Math.max(0, KubeUINbtCompat.getIntOr(reward.data(), "levels", 0)));
+				case "command" -> runCommand(player, KubeUINbtCompat.getStringOr(reward.data(), "command", ""));
 				default -> KubeUI.LOGGER.warn("KubeUI: quest '{}' has a reward of unknown type '{}' - skipped", def.id(), reward.type());
 			}
 		}
 	}
 
 	private static void giveItem(ServerPlayer player, CompoundTag data) {
-		var item = resolveItem(data.getStringOr("item", ""));
+		var item = resolveItem(KubeUINbtCompat.getStringOr(data, "item", ""));
 		if (item == null) {
 			return;
 		}
-		int count = Math.max(1, data.getIntOr("count", 1));
+		int count = Math.max(1, KubeUINbtCompat.getIntOr(data, "count", 1));
 		var stack = new ItemStack(item, count);
 		if (!player.getInventory().add(stack)) {
 			player.drop(stack, false);
@@ -306,27 +289,25 @@ final class KubeUIQuests {
 	/// status - a reward command is authored by whoever built the quest, not the player redeeming
 	/// it) but the player as the command's entity, so `@s` in the reward command resolves to them -
 	/// the same "elevated permission, player-as-entity" shape `player.createCommandSourceStack()`
-	/// plus `.withPermission(...)` gives for free, verified against the real decompiled
-	/// `CommandSourceStack`/`LevelBasedPermissionSet` classes (this Minecraft version's permission
-	/// system is level-*enum*-based, not the plain integer levels of older versions).
+	/// plus `.withPermission(4)` (the real, plain-integer "owner" permission level) gives for free.
 	private static void runCommand(ServerPlayer player, String command) {
 		if (command.isBlank()) {
 			return;
 		}
-		var source = player.createCommandSourceStack().withPermission(LevelBasedPermissionSet.OWNER).withSuppressedOutput();
+		var source = player.createCommandSourceStack().withPermission(4).withSuppressedOutput();
 		player.level().getServer().getCommands().performPrefixedCommand(source, command);
 	}
 
 	// ---------------------------------------------------------------- item/entity id resolution
 
 	private static Item resolveItem(String itemId) {
-		var key = Identifier.tryParse(itemId);
-		return key != null ? BuiltInRegistries.ITEM.getValue(key) : null;
+		var key = ResourceLocation.tryParse(itemId);
+		return key != null ? BuiltInRegistries.ITEM.getOptional(key).orElse(null) : null;
 	}
 
 	static EntityType<?> resolveEntityType(String entityId) {
-		var key = Identifier.tryParse(entityId);
-		return key != null ? BuiltInRegistries.ENTITY_TYPE.getValue(key) : null;
+		var key = ResourceLocation.tryParse(entityId);
+		return key != null ? BuiltInRegistries.ENTITY_TYPE.getOptional(key).orElse(null) : null;
 	}
 
 	// ---------------------------------------------------------------- HUD tracking (session-only, not persisted)
@@ -370,8 +351,8 @@ final class KubeUIQuests {
 
 	static List<String> questGiverQuestIds(Entity entity) {
 		var result = new ArrayList<String>();
-		for (var tag : entity.getPersistentData().getListOrEmpty(QUEST_GIVER_TAG_KEY)) {
-			tag.asString().ifPresent(result::add);
+		for (var tag : entity.getPersistentData().getList(QUEST_GIVER_TAG_KEY, 8)) {
+			result.add(tag.getAsString());
 		}
 		return result;
 	}
@@ -390,11 +371,11 @@ final class KubeUIQuests {
 
 	static KubeUIQuestObjective objectiveFromTag(CompoundTag tag) {
 		return new KubeUIQuestObjective(
-			tag.getStringOr("id", ""),
-			tag.getStringOr("type", ""),
-			tag.getStringOr("label", ""),
-			Math.max(1, tag.getIntOr("target", 1)),
-			tag.getCompound("data").orElseGet(CompoundTag::new)
+			KubeUINbtCompat.getStringOr(tag, "id", ""),
+			KubeUINbtCompat.getStringOr(tag, "type", ""),
+			KubeUINbtCompat.getStringOr(tag, "label", ""),
+			Math.max(1, KubeUINbtCompat.getIntOr(tag, "target", 1)),
+			tag.getCompound("data")
 		);
 	}
 
@@ -406,7 +387,7 @@ final class KubeUIQuests {
 	}
 
 	static KubeUIQuestReward rewardFromTag(CompoundTag tag) {
-		return new KubeUIQuestReward(tag.getStringOr("type", ""), tag.getCompound("data").orElseGet(CompoundTag::new));
+		return new KubeUIQuestReward(KubeUINbtCompat.getStringOr(tag, "type", ""), tag.getCompound("data"));
 	}
 
 	static CompoundTag questToTag(KubeUIQuestDef def) {
@@ -433,32 +414,32 @@ final class KubeUIQuests {
 
 	static KubeUIQuestDef questFromTag(CompoundTag tag) {
 		var requires = new ArrayList<String>();
-		for (var entry : tag.getListOrEmpty("requires")) {
-			entry.asString().ifPresent(requires::add);
+		for (var entry : tag.getList("requires", 8)) {
+			requires.add(entry.getAsString());
 		}
 
 		var objectives = new ArrayList<KubeUIQuestObjective>();
-		for (var entry : tag.getListOrEmpty("objectives")) {
+		for (var entry : tag.getList("objectives", 10)) {
 			if (entry instanceof CompoundTag objectiveTag) {
 				objectives.add(objectiveFromTag(objectiveTag));
 			}
 		}
 
 		var rewards = new ArrayList<KubeUIQuestReward>();
-		for (var entry : tag.getListOrEmpty("rewards")) {
+		for (var entry : tag.getList("rewards", 10)) {
 			if (entry instanceof CompoundTag rewardTag) {
 				rewards.add(rewardFromTag(rewardTag));
 			}
 		}
 
 		return new KubeUIQuestDef(
-			tag.getStringOr("id", ""),
-			tag.getStringOr("title", ""),
-			tag.getStringOr("description", ""),
+			KubeUINbtCompat.getStringOr(tag, "id", ""),
+			KubeUINbtCompat.getStringOr(tag, "title", ""),
+			KubeUINbtCompat.getStringOr(tag, "description", ""),
 			requires,
 			objectives,
 			rewards,
-			tag.getStringOr("source", "editor")
+			KubeUINbtCompat.getStringOr(tag, "source", "editor")
 		);
 	}
 
@@ -470,8 +451,10 @@ final class KubeUIQuests {
 	/// full `Codec` written for the whole quest-def shape (objectives/rewards/opaque `data` tags)
 	/// for no real benefit here: this file is never read by anything except [KubeUIQuests] itself,
 	/// so a plain compressed NBT blob is simpler and just as real/durable as going through that API.
+	private static final LevelResource DATA_DIR = new LevelResource("data");
+
 	private static Path questFile(MinecraftServer server) {
-		return server.getWorldPath(LevelResource.DATA).resolve("kubeui_quests.dat");
+		return server.getWorldPath(DATA_DIR).resolve("kubeui_quests.dat");
 	}
 
 	static void saveEditorQuests(MinecraftServer server) {
@@ -503,7 +486,7 @@ final class KubeUIQuests {
 
 		try {
 			var root = NbtIo.readCompressed(file, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
-			for (var entry : root.getListOrEmpty("quests")) {
+			for (var entry : root.getList("quests", 10)) {
 				if (entry instanceof CompoundTag questTag) {
 					var def = questFromTag(questTag);
 					EDITOR_DEFS.put(def.id(), def);

@@ -13,7 +13,7 @@ import java.util.function.BiConsumer;
 /// the query ([KubeUIRecipeQuery] does the actual lookup, server-side) and reacts to the reply,
 /// intercepted directly in [KubeUINetworking#handleRemote] the same way permission-check/sidebar-
 /// visibility replies already are. `.recipesFor(...)`'s result is a plain `List<CompoundTag>`
-/// (`.getStringOr(...)`/`.getListOrEmpty(...)`, the same accessors every other `data` parameter in
+/// (`.getStringOr(...)`/`.getList(...)`, the same accessors every other `data` parameter in
 /// this codebase already uses from scripts) rather than converted to a `Map`/JS object - `List<T>`
 /// callback parameters are already proven to behave like a real JS array from a script
 /// (`.checkboxGroup(...)`'s `onChange(screen, values)` already does exactly this), so this reuses
@@ -101,11 +101,11 @@ final class KubeUIRecipeBridge {
 
 	private static List<List<String>> parseInputs(CompoundTag tag) {
 		var inputs = new ArrayList<List<String>>();
-		for (var groupTag : tag.getListOrEmpty("inputs")) {
+		for (var groupTag : tag.getList("inputs", 9)) {
 			var ids = new ArrayList<String>();
 			if (groupTag instanceof ListTag group) {
 				for (var idTag : group) {
-					idTag.asString().ifPresent(ids::add);
+					ids.add(idTag.getAsString());
 				}
 			}
 			inputs.add(ids);
@@ -121,9 +121,9 @@ final class KubeUIRecipeBridge {
 	}
 
 	private static void appendRecipeRow(KubeUIScreenBuilder builder, CompoundTag tag) {
-		String recipeId = tag.getStringOr("id", "recipe");
+		String recipeId = KubeUINbtCompat.getStringOr(tag, "id", "recipe");
 		var inputs = parseInputs(tag);
-		String output = tag.getStringOr("output", "");
+		String output = KubeUINbtCompat.getStringOr(tag, "output", "");
 
 		builder.label(recipeId + "_name", shortId(recipeId));
 		builder.row(row -> {

@@ -1,6 +1,6 @@
 package dev.kubeui.gui;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /// Shared visual identity for the quest screens ([KubeUIQuestLogScreen]/[KubeUIQuestGiverScreen]/
 /// [KubeUIQuestEditorScreen]) - a custom-drawn, nine-slice panel texture
@@ -14,7 +14,7 @@ import net.minecraft.resources.Identifier;
 /// element can't achieve that safely in this layout system - `.absolute(...)` always paints on
 /// top, never behind, and normal-flow elements never overlap by construction).
 final class KubeUIQuestTheme {
-	static final Identifier PANEL_TEXTURE = Identifier.fromNamespaceAndPath("kubeui", "textures/gui/quest_panel.png");
+	static final ResourceLocation PANEL_TEXTURE = ResourceLocation.fromNamespaceAndPath("kubeui", "textures/gui/quest_panel.png");
 
 	private KubeUIQuestTheme() {
 	}

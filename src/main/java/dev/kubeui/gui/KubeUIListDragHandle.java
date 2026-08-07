@@ -1,10 +1,8 @@
 package dev.kubeui.gui;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /// The small drag grip at the start of a `.reorderableList(...)` row. Registers itself into the
@@ -23,6 +21,7 @@ import net.minecraft.network.chat.Component;
 /// screen's focus reference doesn't change), and keeps working correctly since all of its state
 /// lives in `state`/`listElement`, not in itself.
 class KubeUIListDragHandle extends AbstractWidget implements KubeUINarratable {
+	private final DoubleClickTracker doubleClickTracker = new DoubleClickTracker();
 	private static final int SIZE = 16;
 	private static final int BAR_HEIGHT = 2;
 	private static final int BAR_GAP = 3;
@@ -52,6 +51,10 @@ class KubeUIListDragHandle extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	public void onClick(double mouseX, double mouseY, int button) {
+		onClick(new MouseButtonEvent(mouseX, mouseY, button), doubleClickTracker.registerClick(mouseX, mouseY));
+	}
+
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
 		state.dragging = true;
 		state.draggingIndex = pos;
@@ -59,6 +62,10 @@ class KubeUIListDragHandle extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	protected void onDrag(double mouseX, double mouseY, double dx, double dy) {
+		onDrag(new MouseButtonEvent(mouseX, mouseY, 0), dx, dy);
+	}
+
 	protected void onDrag(MouseButtonEvent event, double dx, double dy) {
 		if (!state.dragging) {
 			return;
@@ -82,6 +89,10 @@ class KubeUIListDragHandle extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	public void onRelease(double mouseX, double mouseY) {
+		onRelease(new MouseButtonEvent(mouseX, mouseY, 0));
+	}
+
 	public void onRelease(MouseButtonEvent event) {
 		if (state.dragging && state.draggingIndex != state.dragStartIndex && listElement.onReorder != null) {
 			listElement.onReorder.onReorder(context, state.dragStartIndex, state.draggingIndex);
@@ -92,6 +103,10 @@ class KubeUIListDragHandle extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	protected void renderWidget(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		extractWidgetRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
+	}
+
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		boolean isDragged = state.dragging && state.draggingIndex == pos;
 		int color = isDragged ? 0xFF45D6C9 : (isHovered() ? 0xFFEAF3F3 : 0xFF6B7679);

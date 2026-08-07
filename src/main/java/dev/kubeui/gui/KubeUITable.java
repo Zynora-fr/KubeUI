@@ -1,11 +1,9 @@
 package dev.kubeui.gui;
 
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
@@ -18,6 +16,7 @@ import java.util.function.BiConsumer;
 /// `GridLayout`. Cell text isn't clipped/wrapped to its column width - a value wider than its
 /// column just overlaps the next one, same trade-off `.label()` already makes.
 class KubeUITable extends AbstractWidget implements KubeUINarratable {
+	private final DoubleClickTracker doubleClickTracker = new DoubleClickTracker();
 	private static final int ROW_HEIGHT = 14;
 	private static final int HEADER_HEIGHT = 16;
 	private static final int CELL_PADDING = 4;
@@ -69,6 +68,10 @@ class KubeUITable extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	public void onClick(double mouseX, double mouseY, int button) {
+		onClick(new MouseButtonEvent(mouseX, mouseY, button), doubleClickTracker.registerClick(mouseX, mouseY));
+	}
+
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
 		if (onSort != null && event.y() - getY() < HEADER_HEIGHT) {
 			int column = columnAt(event.x());
@@ -79,6 +82,10 @@ class KubeUITable extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	protected void renderWidget(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		extractWidgetRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
+	}
+
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		int accent = styleAccent != null ? styleAccent : KubeUITheme.accentColor();
 		int text = styleColor != null ? styleColor : KubeUITheme.textColor();

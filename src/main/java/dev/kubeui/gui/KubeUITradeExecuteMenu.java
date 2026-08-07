@@ -8,7 +8,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -173,7 +173,17 @@ final class KubeUITradeExecuteMenu extends AbstractContainerMenu {
 		// left ~99px of villager.png's artwork is reserved for the trade-offer-button list; using
 		// the generic default here is exactly what made the slots look shifted relative to the
 		// texture's own inventory-grid artwork.
-		addStandardInventorySlots(inventory, 108, 84);
+		// 1.21.1 has no addStandardInventorySlots(...) helper - inlined here matching the
+		// real vanilla MerchantMenu/CraftingMenu convention exactly (3x9 main inventory grid,
+		// then a separate 9-wide hotbar row 58px below the grid's own top).
+		for (int row = 0; row < 3; row++) {
+			for (int col = 0; col < 9; col++) {
+				addSlot(new Slot(inventory, col + row * 9 + 9, 108 + col * 18, 84 + row * 18));
+			}
+		}
+		for (int col = 0; col < 9; col++) {
+			addSlot(new Slot(inventory, col, 108 + col * 18, 84 + 58));
+		}
 		// Deliberately no auto-selected offer here anymore - the payment/result slots start empty
 		// and stay that way until the player actually clicks a row themselves. Real vanilla doesn't
 		// auto-pick an offer either (MerchantMenu#tryMoveItems only ever runs from a real button
@@ -213,8 +223,8 @@ final class KubeUITradeExecuteMenu extends AbstractContainerMenu {
 	}
 
 	@Override
-	public void clicked(int slotIndex, int button, ContainerInput type, Player clickingPlayer) {
-		if (slotIndex < PREVIEW_SLOT_COUNT && type == ContainerInput.PICKUP && button == 0
+	public void clicked(int slotIndex, int button, ClickType type, Player clickingPlayer) {
+		if (slotIndex < PREVIEW_SLOT_COUNT && type == ClickType.PICKUP && button == 0
 			&& clickingPlayer instanceof ServerPlayer serverPlayer) {
 			selectOffer(slotIndex % PREVIEW_ROWS, serverPlayer);
 			return;
@@ -372,7 +382,7 @@ final class KubeUITradeExecuteMenu extends AbstractContainerMenu {
 	}
 
 	private static Item resolveItem(String itemId) {
-		var key = net.minecraft.resources.Identifier.tryParse(itemId);
-		return key != null ? BuiltInRegistries.ITEM.getValue(key) : null;
+		var key = net.minecraft.resources.ResourceLocation.tryParse(itemId);
+		return key != null ? BuiltInRegistries.ITEM.getOptional(key).orElse(null) : null;
 	}
 }

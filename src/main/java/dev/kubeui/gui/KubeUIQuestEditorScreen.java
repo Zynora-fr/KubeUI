@@ -95,8 +95,8 @@ public final class KubeUIQuestEditorScreen {
 		} else {
 			b.scrollPanel(listHeight, panel -> {
 				for (var quest : savedQuests) {
-					String id = quest.getStringOr("id", "");
-					String title = quest.getStringOr("title", id);
+					String id = KubeUINbtCompat.getStringOr(quest, "id", "");
+					String title = KubeUINbtCompat.getStringOr(quest, "title", id);
 					panel.row(row -> {
 						row.label("title_" + id, title).width(totalWidth - 170);
 						row.button("Edit", ctx -> startEditing(quest)).width(70);
@@ -349,9 +349,9 @@ public final class KubeUIQuestEditorScreen {
 
 	private static String summarizeReward(KubeUIQuestReward reward) {
 		return switch (reward.type()) {
-			case "item" -> reward.data().getIntOr("count", 1) + "x " + shortId(reward.data().getStringOr("item", ""));
-			case "xp" -> reward.data().getIntOr("levels", 0) + " level(s)";
-			case "command" -> reward.data().getStringOr("command", "");
+			case "item" -> KubeUINbtCompat.getIntOr(reward.data(), "count", 1) + "x " + shortId(KubeUINbtCompat.getStringOr(reward.data(), "item", ""));
+			case "xp" -> KubeUINbtCompat.getIntOr(reward.data(), "levels", 0) + " level(s)";
+			case "command" -> KubeUINbtCompat.getStringOr(reward.data(), "command", "");
 			default -> "";
 		};
 	}

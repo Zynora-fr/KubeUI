@@ -2,12 +2,9 @@ package dev.kubeui.gui;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.BiConsumer;
@@ -17,6 +14,7 @@ import java.util.function.BiConsumer;
 /// captured and becomes the new binding; `onChange` receives the raw key code (an `int`, same
 /// type `KeyEvent#key()` uses) - persisting/comparing it is the script's job, same as `.number()`.
 class KubeUIKeybindCapture extends AbstractWidget implements KubeUINarratable {
+	private final DoubleClickTracker doubleClickTracker = new DoubleClickTracker();
 	private final Font font;
 	private final BiConsumer<KubeUIContext, Integer> onChange;
 	private final KubeUIContext context;
@@ -57,11 +55,19 @@ class KubeUIKeybindCapture extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	public void onClick(double mouseX, double mouseY, int button) {
+		onClick(new MouseButtonEvent(mouseX, mouseY, button), doubleClickTracker.registerClick(mouseX, mouseY));
+	}
+
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
 		listening = true;
 	}
 
 	@Override
+	public boolean keyPressed(int keyCode, int scancode, int modifiers) {
+		return keyPressed(new KeyEvent(keyCode, scancode, modifiers));
+	}
+
 	public boolean keyPressed(KeyEvent event) {
 		if (!listening) {
 			// Enter/Space starts listening, same as a click would - without this, a keyboard-only
@@ -83,6 +89,10 @@ class KubeUIKeybindCapture extends AbstractWidget implements KubeUINarratable {
 	}
 
 	@Override
+	protected void renderWidget(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		extractWidgetRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
+	}
+
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		int bg = listening ? 0xFF45D6C9 : isHovered() ? 0x40FFFFFF : 0x20FFFFFF;
 		graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), bg);

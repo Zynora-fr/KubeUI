@@ -1,11 +1,9 @@
 package dev.kubeui.gui;
 
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
@@ -17,6 +15,7 @@ import java.util.function.Consumer;
 /// animates without needing continuous rebuilds) instead of showing a single fixed item. An empty
 /// `stacks` list renders as a plain empty slot rather than failing.
 class KubeUIRecipeSlotWidget extends AbstractWidget implements KubeUINarratable {
+	private final DoubleClickTracker doubleClickTracker = new DoubleClickTracker();
 	private static final long CYCLE_MS = 1000;
 
 	private final List<ItemStack> stacks;
@@ -46,6 +45,10 @@ class KubeUIRecipeSlotWidget extends AbstractWidget implements KubeUINarratable 
 	}
 
 	@Override
+	public void onClick(double mouseX, double mouseY, int button) {
+		onClick(new MouseButtonEvent(mouseX, mouseY, button), doubleClickTracker.registerClick(mouseX, mouseY));
+	}
+
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
 		if (onClick != null) {
 			onClick.accept(event);
@@ -53,6 +56,10 @@ class KubeUIRecipeSlotWidget extends AbstractWidget implements KubeUINarratable 
 	}
 
 	@Override
+	protected void renderWidget(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		extractWidgetRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
+	}
+
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		if (active && isHovered()) {
 			graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0x80FFFFFF);

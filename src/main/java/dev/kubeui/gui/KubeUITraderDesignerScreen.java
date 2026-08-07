@@ -29,14 +29,14 @@ public final class KubeUITraderDesignerScreen {
 
 	static void receiveList(CompoundTag data) {
 		var list = new ArrayList<CompoundTag>();
-		for (var entry : data.getListOrEmpty("trades")) {
+		for (var entry : data.getList("trades", 10)) {
 			if (entry instanceof CompoundTag tag) {
 				list.add(tag);
 			}
 		}
 		lastKnownTrades = list;
-		lastKnownHasAI = data.getBooleanOr("hasAI", true);
-		lastKnownCanMove = data.getBooleanOr("canMove", true);
+		lastKnownHasAI = KubeUINbtCompat.getBooleanOr(data, "hasAI", true);
+		lastKnownCanMove = KubeUINbtCompat.getBooleanOr(data, "canMove", true);
 		refresh();
 	}
 
@@ -65,17 +65,17 @@ public final class KubeUITraderDesignerScreen {
 					int index = i;
 					var tag = lastKnownTrades.get(i);
 					panel.row(row -> {
-						for (var costEntry : tag.getListOrEmpty("costs")) {
+						for (var costEntry : tag.getList("costs", 10)) {
 							if (costEntry instanceof CompoundTag costTag) {
-								String costItem = costTag.getStringOr("item", "");
+								String costItem = KubeUINbtCompat.getStringOr(costTag, "item", "");
 								row.recipeSlot("cost_" + index + "_" + costItem, List.of(costItem));
-								row.label("costLabel_" + index + "_" + costItem, "x" + costTag.getIntOr("count", 1)).width(24);
+								row.label("costLabel_" + index + "_" + costItem, "x" + KubeUINbtCompat.getIntOr(costTag, "count", 1)).width(24);
 							}
 						}
 						row.label("arrow_" + index, "  ->  ").width(40);
-						String resultItem = tag.getStringOr("resultItem", "");
+						String resultItem = KubeUINbtCompat.getStringOr(tag, "resultItem", "");
 						row.recipeSlot("result_" + index, List.of(resultItem));
-						row.label("resultLabel_" + index, "x" + tag.getIntOr("resultCount", 1)).width(24);
+						row.label("resultLabel_" + index, "x" + KubeUINbtCompat.getIntOr(tag, "resultCount", 1)).width(24);
 						row.button("Remove", ctx -> {
 							var data = new CompoundTag();
 							data.putInt("index", index);

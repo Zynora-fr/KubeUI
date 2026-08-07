@@ -1,16 +1,15 @@
 package dev.kubeui.gui;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.IntConsumer;
 
 /// A clickable flat color square, used by the color picker's preset palette.
 class KubeUIColorSwatch extends AbstractWidget {
+	private final DoubleClickTracker doubleClickTracker = new DoubleClickTracker();
 	private final int color;
 	private final IntConsumer onClick;
 
@@ -21,11 +20,19 @@ class KubeUIColorSwatch extends AbstractWidget {
 	}
 
 	@Override
+	public void onClick(double mouseX, double mouseY, int button) {
+		onClick(new MouseButtonEvent(mouseX, mouseY, button), doubleClickTracker.registerClick(mouseX, mouseY));
+	}
+
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
 		onClick.accept(color);
 	}
 
 	@Override
+	protected void renderWidget(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		extractWidgetRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
+	}
+
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0xFF000000 | color);
 

@@ -313,11 +313,10 @@ public final class KubeUIActions {
 	/// the whole object.
 	public static CompoundTag playerData(ServerPlayer player) {
 		var root = player.getPersistentData();
-		return root.getCompound("kubeui").orElseGet(() -> {
-			var created = new CompoundTag();
-			root.put("kubeui", created);
-			return created;
-		});
+		if (!root.contains("kubeui")) {
+			root.put("kubeui", new CompoundTag());
+		}
+		return root.getCompound("kubeui");
 	}
 
 	/// Registers a named pool of weighted trades - `trades` is a list of `{id, weight, costs,

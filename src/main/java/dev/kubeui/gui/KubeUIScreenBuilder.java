@@ -5,7 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.locale.Language;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -86,11 +86,11 @@ public class KubeUIScreenBuilder {
 	String animationType = "fade";
 	String animationEasing = "linear";
 
-	Identifier customFont;
+	ResourceLocation customFont;
 
 	String backgroundMode = "dirt";
-	Identifier backgroundTexture;
-	Identifier windowBackgroundTexture;
+	ResourceLocation backgroundTexture;
+	ResourceLocation windowBackgroundTexture;
 
 	Consumer<KubeUIContext> onOpenCallback;
 	Consumer<KubeUIContext> onCloseCallback;
@@ -292,7 +292,7 @@ public class KubeUIScreenBuilder {
 	}
 
 	/// Adds a static image, scaled to fill `width` x `height`. Not updatable afterwards.
-	public KubeUIScreenBuilder image(Identifier texture, int width, int height) {
+	public KubeUIScreenBuilder image(ResourceLocation texture, int width, int height) {
 		return add(new ImageElement(texture, width, height));
 	}
 
@@ -400,7 +400,7 @@ public class KubeUIScreenBuilder {
 	/// Adds a nine-slice background panel (corners fixed-size, edges/center stretched) - unlike
 	/// `.image(...)`, which stretches the whole texture uniformly. See [KubeUIPanelBackground]
 	/// for the fixed texture-size/border convention this currently assumes.
-	public KubeUIScreenBuilder panelBackground(Identifier texture) {
+	public KubeUIScreenBuilder panelBackground(ResourceLocation texture) {
 		return add(new PanelBackgroundElement(texture));
 	}
 
@@ -859,14 +859,14 @@ public class KubeUIScreenBuilder {
 
 	/// Same as [#background(String)], but a custom texture stretched to fill the screen instead of
 	/// a named mode. Root builder only.
-	public KubeUIScreenBuilder background(Identifier texture) {
+	public KubeUIScreenBuilder background(ResourceLocation texture) {
 		this.backgroundTexture = texture;
 		this.backgroundMode = "texture";
 		return this;
 	}
 
 	/// A real nine-slice panel drawn behind this screen's own content area (not the whole game
-	/// window - see [#background(Identifier)] for that) - the actual "give this screen a designed
+	/// window - see [#background(ResourceLocation)] for that) - the actual "give this screen a designed
 	/// look" hook, unlike [KubeUIScreenBuilder#panelBackground], which is a normal-flow element
 	/// that occupies its own row/column space rather than sitting behind everything else (this
 	/// widget system has no way for normal-flow content to overlap by design, and an
@@ -875,7 +875,7 @@ public class KubeUIScreenBuilder {
 	/// something the screen itself draws first, not a widget in the tree). Same fixed
 	/// 32x32-texture/8px-border nine-slice convention as `.panelBackground(...)`. Root builder
 	/// only.
-	public KubeUIScreenBuilder windowBackground(Identifier texture) {
+	public KubeUIScreenBuilder windowBackground(ResourceLocation texture) {
 		this.windowBackgroundTexture = texture;
 		return this;
 	}
@@ -981,7 +981,7 @@ public class KubeUIScreenBuilder {
 
 	/// Renders every label/button in this screen with a resource-pack-provided font instead of
 	/// the default. Root builder only.
-	public KubeUIScreenBuilder font(Identifier fontId) {
+	public KubeUIScreenBuilder font(ResourceLocation fontId) {
 		this.customFont = fontId;
 		return this;
 	}
@@ -1226,7 +1226,7 @@ public class KubeUIScreenBuilder {
 
 	/// Plays `soundId` (in addition to the default click sound) when the last-added element is
 	/// interacted with. Supported on `button`, `toggle` and `item`.
-	public KubeUIScreenBuilder sound(Identifier soundId) {
+	public KubeUIScreenBuilder sound(ResourceLocation soundId) {
 		lastStyle().clickSound = soundId;
 		return this;
 	}
@@ -1303,8 +1303,8 @@ public class KubeUIScreenBuilder {
 	/// Asks the server for every recipe with an ingredient slot that accepts `itemId`, across every
 	/// recipe type at once - `onResult(screen, recipes)` fires once it replies. Each entry is a raw
 	/// `CompoundTag` with `id` (string), `inputs` (a list of ingredient groups, each a list of item
-	/// id strings - `.getListOrEmpty("inputs")`), and `output` (a single item id string, absent if
-	/// a recipe has no simple item result) - the same `.getStringOr(...)`/`.getListOrEmpty(...)`
+	/// id strings - `.getList("inputs")`), and `output` (a single item id string, absent if
+	/// a recipe has no simple item result) - the same `.getStringOr(...)`/`.getList(...)`
 	/// accessors every other `data` parameter in this API already uses. `screen` is always null
 	/// (there's no open-screen context for this call) - `onResult` is really just a plain callback,
 	/// typed to match every other `(screen, value)` callback in this API. Only the most recent
@@ -1905,7 +1905,7 @@ public class KubeUIScreenBuilder {
 		Integer tabOrder;
 		String narration;
 		String id;
-		Identifier clickSound;
+		ResourceLocation clickSound;
 		List<String> contextMenuItems;
 		java.util.function.Function<KubeUIContext, List<String>> contextMenuItemsSupplier;
 		BiConsumer<KubeUIContext, String> contextMenuOnSelect;
@@ -1995,7 +1995,7 @@ public class KubeUIScreenBuilder {
 	record TextAreaElement(String id, String initialValue, String hint, int height, BiConsumer<KubeUIContext, String> onChange) implements Element {
 	}
 
-	record ImageElement(Identifier texture, int width, int height) implements Element {
+	record ImageElement(ResourceLocation texture, int width, int height) implements Element {
 	}
 
 	record ItemElement(ItemStack stack, Consumer<KubeUIContext> onClick) implements Element {
@@ -2046,7 +2046,7 @@ public class KubeUIScreenBuilder {
 	record SpinnerElement(String id) implements Element {
 	}
 
-	record PanelBackgroundElement(Identifier texture) implements Element {
+	record PanelBackgroundElement(ResourceLocation texture) implements Element {
 	}
 
 	record EntityPreviewElement(EntityType<?> entityType) implements Element {

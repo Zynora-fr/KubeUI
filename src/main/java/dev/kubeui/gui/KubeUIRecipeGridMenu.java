@@ -5,7 +5,7 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
@@ -53,7 +53,17 @@ final class KubeUIRecipeGridMenu extends AbstractContainerMenu {
 		for (int i = 0; i < gridPositions.length; i++) {
 			addSlot(new Slot(craftContainer, GRID_START + i, gridPositions[i][0], gridPositions[i][1]));
 		}
-		addStandardInventorySlots(inventory, 8, 84);
+		// 1.21.1 has no addStandardInventorySlots(...) helper - inlined here matching the
+		// real vanilla MerchantMenu/CraftingMenu convention exactly (3x9 main inventory grid,
+		// then a separate 9-wide hotbar row 58px below the grid's own top).
+		for (int row = 0; row < 3; row++) {
+			for (int col = 0; col < 9; col++) {
+				addSlot(new Slot(inventory, col + row * 9 + 9, 8 + col * 18, 84 + row * 18));
+			}
+		}
+		for (int col = 0; col < 9; col++) {
+			addSlot(new Slot(inventory, col, 8 + col * 18, 84 + 58));
+		}
 	}
 
 	/// Real vanilla pixel positions for the ingredient slot(s), by kind - `CraftingMenu`'s 3x3 grid
@@ -97,8 +107,8 @@ final class KubeUIRecipeGridMenu extends AbstractContainerMenu {
 	}
 
 	@Override
-	public void clicked(int slotIndex, int button, ContainerInput type, Player player) {
-		if (slotIndex == OUTPUT_INDEX && type == ContainerInput.PICKUP && button == 0
+	public void clicked(int slotIndex, int button, ClickType type, Player player) {
+		if (slotIndex == OUTPUT_INDEX && type == ClickType.PICKUP && button == 0
 			&& getSlot(OUTPUT_INDEX).hasItem() && player instanceof ServerPlayer serverPlayer
 			&& KubeUIRecipeDesignerGrid.tryCaptureAndSave(this, kind, serverPlayer)) {
 			return;

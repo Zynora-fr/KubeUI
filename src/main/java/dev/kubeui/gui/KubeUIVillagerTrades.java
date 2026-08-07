@@ -4,7 +4,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
@@ -66,7 +66,7 @@ final class KubeUIVillagerTrades {
 	}
 
 	static String poolOf(Entity entity) {
-		return entity.getPersistentData().getStringOr(POOL_TAG_KEY, "");
+		return KubeUINbtCompat.getStringOr(entity.getPersistentData(), POOL_TAG_KEY, "");
 	}
 
 	/// Bakes `trades` directly onto `entity`'s own persistent data - real vanilla entity NBT,
@@ -96,7 +96,7 @@ final class KubeUIVillagerTrades {
 		}
 
 		var result = new ArrayList<KubeUITradeDef>();
-		for (var tag : root.getListOrEmpty(INLINE_TRADES_TAG_KEY)) {
+		for (var tag : root.getList(INLINE_TRADES_TAG_KEY, 10)) {
 			if (tag instanceof CompoundTag compoundTag) {
 				result.add(tradeFromTag(compoundTag));
 			}
@@ -159,8 +159,8 @@ final class KubeUIVillagerTrades {
 		var root = entity.getPersistentData();
 		List<String> rolledIds = new ArrayList<>();
 		if (root.contains(ROLLED_TAG_KEY)) {
-			for (var tag : root.getListOrEmpty(ROLLED_TAG_KEY)) {
-				tag.asString().ifPresent(rolledIds::add);
+			for (var tag : root.getList(ROLLED_TAG_KEY, 8)) {
+				rolledIds.add(tag.getAsString());
 			}
 		} else {
 			rolledIds = rollWeighted(pool, Math.min(pool.size(), MAX_OFFERS_PER_ENTITY));
@@ -212,27 +212,23 @@ final class KubeUIVillagerTrades {
 
 	private static CompoundTag tradeState(Entity entity) {
 		var root = entity.getPersistentData();
-		return root.getCompound(STATE_TAG_KEY).orElseGet(() -> {
-			var created = new CompoundTag();
-			root.put(STATE_TAG_KEY, created);
-			return created;
-		});
+		return KubeUINbtCompat.getCompoundOrCreate(root, STATE_TAG_KEY);
 	}
 
 	static int usesRemaining(Entity entity, KubeUITradeDef def) {
 		var state = tradeState(entity);
-		var tradeTag = state.getCompound(def.id()).orElse(null);
+		var tradeTag = KubeUINbtCompat.getCompoundOrNull(state, def.id());
 		if (tradeTag == null) {
 			return def.maxUses();
 		}
 
 		long now = entity.level().getGameTime();
-		long restockAt = tradeTag.getLongOr("restockAt", -1);
+		long restockAt = KubeUINbtCompat.getLongOr(tradeTag, "restockAt", -1);
 		if (restockAt >= 0 && now >= restockAt) {
 			return def.maxUses();
 		}
 
-		return tradeTag.getIntOr("uses", def.maxUses());
+		return KubeUINbtCompat.getIntOr(tradeTag, "uses", def.maxUses());
 	}
 
 	private static void consumeUse(Entity entity, KubeUITradeDef def) {
@@ -295,22 +291,22 @@ final class KubeUIVillagerTrades {
 	private static void recordHistory(ServerPlayer player, String tradeId) {
 		var root = player.getPersistentData();
 		var history = new ListTag();
-		history.addAll(root.getListOrEmpty(HISTORY_TAG_KEY));
+		history.addAll(root.getList(HISTORY_TAG_KEY, 8));
 		history.add(StringTag.valueOf(tradeId));
 		root.put(HISTORY_TAG_KEY, history);
 	}
 
 	static List<String> tradeHistory(ServerPlayer player) {
 		var result = new ArrayList<String>();
-		for (var tag : player.getPersistentData().getListOrEmpty(HISTORY_TAG_KEY)) {
-			tag.asString().ifPresent(result::add);
+		for (var tag : player.getPersistentData().getList(HISTORY_TAG_KEY, 8)) {
+			result.add(tag.getAsString());
 		}
 		return result;
 	}
 
 	private static Item resolveItem(String itemId) {
-		var identifier = Identifier.tryParse(itemId);
-		return identifier != null ? BuiltInRegistries.ITEM.getValue(identifier) : null;
+		var identifier = ResourceLocation.tryParse(itemId);
+		return identifier != null ? BuiltInRegistries.ITEM.getOptional(identifier).orElse(null) : null;
 	}
 
 	/// NBT round-trip for a [KubeUITradeDef] - used to bake a trader egg's trade list onto its
@@ -339,19 +335,19 @@ final class KubeUIVillagerTrades {
 
 	static KubeUITradeDef tradeFromTag(CompoundTag tag) {
 		var costs = new ArrayList<KubeUITradeCost>();
-		for (var entry : tag.getListOrEmpty("costs")) {
+		for (var entry : tag.getList("costs", 10)) {
 			if (entry instanceof CompoundTag costTag) {
-				costs.add(new KubeUITradeCost(costTag.getStringOr("item", ""), Math.max(1, costTag.getIntOr("count", 1))));
+				costs.add(new KubeUITradeCost(KubeUINbtCompat.getStringOr(costTag, "item", ""), Math.max(1, KubeUINbtCompat.getIntOr(costTag, "count", 1))));
 			}
 		}
 		return new KubeUITradeDef(
-			tag.getStringOr("id", ""),
-			Math.max(1, tag.getIntOr("weight", 1)),
+			KubeUINbtCompat.getStringOr(tag, "id", ""),
+			Math.max(1, KubeUINbtCompat.getIntOr(tag, "weight", 1)),
 			costs,
-			tag.getStringOr("resultItem", ""),
-			Math.max(1, tag.getIntOr("resultCount", 1)),
-			Math.max(1, tag.getIntOr("maxUses", 12)),
-			Math.max(0, tag.getIntOr("restockTicks", 24000))
+			KubeUINbtCompat.getStringOr(tag, "resultItem", ""),
+			Math.max(1, KubeUINbtCompat.getIntOr(tag, "resultCount", 1)),
+			Math.max(1, KubeUINbtCompat.getIntOr(tag, "maxUses", 12)),
+			Math.max(0, KubeUINbtCompat.getIntOr(tag, "restockTicks", 24000))
 		);
 	}
 }

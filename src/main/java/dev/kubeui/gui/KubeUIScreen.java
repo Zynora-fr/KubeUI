@@ -1,15 +1,12 @@
 package dev.kubeui.gui;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.AbstractScrollArea;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.MultiLineEditBox;
-import net.minecraft.client.gui.components.ScrollableLayout;
 import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.layouts.FrameLayout;
@@ -19,17 +16,13 @@ import net.minecraft.client.gui.layouts.LayoutElement;
 import net.minecraft.client.gui.navigation.ScreenPosition;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.FontDescription;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.item.ItemStack;
 import dev.kubeui.KubeUI;
@@ -117,8 +110,8 @@ public class KubeUIScreen extends Screen {
 	final Map<EditBox, java.util.Deque<String>> undoStacks = new HashMap<>();
 	final Map<EditBox, java.util.Deque<String>> redoStacks = new HashMap<>();
 	final Map<EditBox, String> lastKnownValues = new HashMap<>();
-	final List<net.minecraft.client.gui.components.AbstractScrollArea> scrollAreas = new ArrayList<>();
-	final Map<net.minecraft.client.gui.components.AbstractScrollArea, Double> scrollVelocity = new HashMap<>();
+	final List<AbstractScrollArea> scrollAreas = new ArrayList<>();
+	final Map<AbstractScrollArea, Double> scrollVelocity = new HashMap<>();
 
 	private String activeTab;
 	private Layout root;
@@ -173,9 +166,18 @@ public class KubeUIScreen extends Screen {
 	/// for injecting a KubeUI-built panel into a *different*, vanilla-owned screen instead of
 	/// opening its own (see `KubeUIScreenInjector`). Doesn't fire `KubeUIEvents.SCREEN_OPEN` or
 	/// `.onOpen(...)` - this isn't really "opening" a screen from the player's perspective.
+	///
+	/// `Screen#init(Minecraft, int, int)` - the only place that normally sets `this.minecraft`/
+	/// `this.font` - never runs for a detached screen, so both are set here by hand before
+	/// `rebuild()` creates any widget. Left unset, `this.font` stays null and every `StringWidget`
+	/// `rebuild()` builds bakes in that null reference; added straight onto the host screen via
+	/// `KubeUIScreenInjectorHandler`, they then NPE the *host* screen's render the moment vanilla
+	/// draws them, regardless of the host's own (perfectly valid) font.
 	public List<AbstractWidget> buildDetached(int width, int height) {
 		this.width = width;
 		this.height = height;
+		this.minecraft = Minecraft.getInstance();
+		this.font = this.minecraft.font;
 		rebuild();
 		return allWidgets;
 	}
@@ -455,8 +457,8 @@ public class KubeUIScreen extends Screen {
 	/// Called (via [KubeUINetworking]) once the server replies to a [#requestMissingPermissions]
 	/// batch - `results` maps each requested gate name to whether this player has it.
 	void applyPermissionResults(CompoundTag results) {
-		for (String gate : results.keySet()) {
-			permissionCache.put(gate, results.getBooleanOr(gate, false));
+		for (String gate : results.getAllKeys()) {
+			permissionCache.put(gate, KubeUINbtCompat.getBooleanOr(results, gate, false));
 			pendingPermissionGates.remove(gate);
 		}
 		applyKnownPermissions();
@@ -702,7 +704,11 @@ public class KubeUIScreen extends Screen {
 	}
 
 	@Override
-	public boolean keyPressed(KeyEvent event) {
+	public boolean keyPressed(int keyCode, int scancode, int modifiers) {
+		return keyPressed(new KeyEvent(keyCode, scancode, modifiers), keyCode, scancode, modifiers);
+	}
+
+	private boolean keyPressed(KeyEvent event, int keyCode, int scancode, int modifiers) {
 		if (getFocused() instanceof EditBox editBox && undoStacks.containsKey(editBox) && event.hasControlDown()) {
 			if (event.key() == GLFW.GLFW_KEY_Z) {
 				if (event.hasShiftDown()) {
@@ -729,7 +735,7 @@ public class KubeUIScreen extends Screen {
 			}
 		}
 
-		return super.keyPressed(event);
+		return super.keyPressed(keyCode, scancode, modifiers);
 	}
 
 	/// `ContainerEventHandler#handleTabNavigation` (the real vanilla Tab-navigation logic, private -
@@ -1099,7 +1105,7 @@ public class KubeUIScreen extends Screen {
 			case KubeUIScreenBuilder.ButtonElement e -> {
 				int w = resolveWidth(entry, owner.elementWidth);
 				int h = resolveHeight(entry, owner.buttonHeight);
-				Identifier sound = entry.style.clickSound;
+				ResourceLocation sound = entry.style.clickSound;
 				yield Button.builder(styledText(e.text()), b -> {
 					e.onClick().accept(context);
 					playSound(sound);
@@ -1111,7 +1117,7 @@ public class KubeUIScreen extends Screen {
 				yield widget;
 			}
 			case KubeUIScreenBuilder.ToggleElement e -> {
-				Identifier sound = entry.style.clickSound;
+				ResourceLocation sound = entry.style.clickSound;
 				Object saved = persisted(e.id());
 				boolean initial = saved instanceof Boolean b ? b : e.initial();
 
@@ -1170,7 +1176,8 @@ public class KubeUIScreen extends Screen {
 				Object saved = persisted(e.id());
 				String initial = saved instanceof String s && e.options().contains(s) ? s
 					: e.initial() != null && e.options().contains(e.initial()) ? e.initial() : e.options().get(0);
-				var widget = CycleButton.builder(Component::literal, initial)
+				var widget = CycleButton.<String>builder(Component::literal)
+					.withInitialValue(initial)
 					.withValues(e.options())
 					.displayOnlyValue()
 					.create(0, 0, resolveWidth(entry, owner.elementWidth), resolveHeight(entry, owner.buttonHeight), Component.literal(e.id()), (button, value) -> e.onChange().accept(context, value));
@@ -1178,9 +1185,8 @@ public class KubeUIScreen extends Screen {
 				yield widget;
 			}
 			case KubeUIScreenBuilder.TextAreaElement e -> {
-				var widget = MultiLineEditBox.builder()
-					.setPlaceholder(e.hint() != null ? Component.literal(e.hint()) : Component.empty())
-					.build(font, resolveWidth(entry, owner.elementWidth), resolveHeight(entry, e.height()), Component.literal(e.id()));
+				var widget = new MultiLineEditBox(font, 0, 0, resolveWidth(entry, owner.elementWidth), resolveHeight(entry, e.height()),
+					e.hint() != null ? Component.literal(e.hint()) : Component.empty(), Component.literal(e.id()));
 				Object saved = persisted(e.id());
 				widget.setValue(saved instanceof String s ? s : e.initialValue());
 				widget.setValueListener(value -> e.onChange().accept(context, value));
@@ -1190,7 +1196,7 @@ public class KubeUIScreen extends Screen {
 			case KubeUIScreenBuilder.ImageElement e ->
 				new KubeUIImageWidget(0, 0, resolveWidth(entry, e.width()), resolveHeight(entry, e.height()), e.texture());
 			case KubeUIScreenBuilder.ItemElement e -> {
-				Identifier sound = entry.style.clickSound;
+				ResourceLocation sound = entry.style.clickSound;
 				var onClick = e.onClick();
 				yield new KubeUIItemWidget(0, 0, e.stack(), font, onClick == null ? null : ev -> {
 					onClick.accept(context);
@@ -1198,12 +1204,12 @@ public class KubeUIScreen extends Screen {
 				});
 			}
 			case KubeUIScreenBuilder.RecipeSlotElement e -> {
-				Identifier sound = entry.style.clickSound;
+				ResourceLocation sound = entry.style.clickSound;
 				var onClick = e.onClick();
 				var stacks = new java.util.ArrayList<net.minecraft.world.item.ItemStack>();
 				for (String itemId : e.itemIds()) {
-					var itemIdentifier = Identifier.tryParse(itemId);
-					var item = itemIdentifier != null ? net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(itemIdentifier) : null;
+					var itemIdentifier = ResourceLocation.tryParse(itemId);
+					var item = itemIdentifier != null ? net.minecraft.core.registries.BuiltInRegistries.ITEM.getOptional(itemIdentifier).orElse(null) : null;
 					if (item != null) {
 						stacks.add(new net.minecraft.world.item.ItemStack(item));
 					}
@@ -1229,7 +1235,7 @@ public class KubeUIScreen extends Screen {
 			case KubeUIScreenBuilder.RichTextElement e -> {
 				int width = resolveWidth(entry, owner.elementWidth);
 				int height = KubeUIRichText.wrappedHeight(font, e.text(), width);
-				Identifier sound = entry.style.clickSound;
+				ResourceLocation sound = entry.style.clickSound;
 				var onClick = e.onClick();
 				yield new KubeUIRichText(0, 0, width, height, e.text(), font, onClick == null ? null : ev -> {
 					onClick.accept(context);
@@ -1534,8 +1540,8 @@ public class KubeUIScreen extends Screen {
 		int col = 0;
 
 		if (e.kind.equals("item")) {
-			var identifier = net.minecraft.resources.Identifier.parse(id);
-			var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(identifier);
+			var identifier = net.minecraft.resources.ResourceLocation.parse(id);
+			var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.getOptional(identifier).orElse(null);
 			if (item != null) {
 				row.addChild(new KubeUIItemWidget(0, 0, new ItemStack(item), font, null), 0, col++);
 			}
@@ -1561,7 +1567,7 @@ public class KubeUIScreen extends Screen {
 		var level = Minecraft.getInstance().level;
 
 		if (level != null) {
-			var entity = e.entityType().create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+			var entity = e.entityType().create(level);
 			if (entity instanceof net.minecraft.world.entity.LivingEntity living) {
 				return new KubeUIEntityPreview(0, 0, width, height, living);
 			}
@@ -1782,15 +1788,21 @@ public class KubeUIScreen extends Screen {
 		float pivotY = root.getY() + root.getHeight() / 2f;
 		double correctedX = pivotX + (event.x() - pivotX) / builder.renderScale;
 		double correctedY = pivotY + (event.y() - pivotY) / builder.renderScale;
-		return new MouseButtonEvent(correctedX, correctedY, event.buttonInfo());
+		return new MouseButtonEvent(correctedX, correctedY, event.button());
 	}
 
+	private final DoubleClickTracker doubleClickTracker = new DoubleClickTracker();
+
 	@Override
-	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+	public boolean mouseClicked(double mouseX, double mouseY, int button) {
+		return mouseClicked(new MouseButtonEvent(mouseX, mouseY, button), doubleClickTracker.registerClick(mouseX, mouseY));
+	}
+
+	private boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
 		event = correctForRenderScale(event);
 
 		if (activeContextMenu != null) {
-			boolean handled = activeContextMenu.mouseClicked(event, doubleClick);
+			boolean handled = activeContextMenu.mouseClicked(event.x(), event.y(), event.button());
 			dismissContextMenu();
 			if (handled) {
 				return true;
@@ -1826,7 +1838,7 @@ public class KubeUIScreen extends Screen {
 			}
 		}
 
-		boolean handled = super.mouseClicked(event, doubleClick);
+		boolean handled = super.mouseClicked(event.x(), event.y(), event.button());
 
 		if (doubleClick) {
 			var target = widgetAt(event.x(), event.y());
@@ -1920,7 +1932,11 @@ public class KubeUIScreen extends Screen {
 	private static final double DRAG_START_THRESHOLD = 4.0;
 
 	@Override
-	public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+	public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
+		return mouseDragged(new MouseButtonEvent(mouseX, mouseY, button), dx, dy);
+	}
+
+	private boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
 		event = correctForRenderScale(event);
 		dx /= builder.renderScale;
 		dy /= builder.renderScale;
@@ -1963,11 +1979,15 @@ public class KubeUIScreen extends Screen {
 			return true;
 		}
 
-		return super.mouseDragged(event, dx, dy);
+		return super.mouseDragged(event.x(), event.y(), event.button(), dx, dy);
 	}
 
 	@Override
-	public boolean mouseReleased(MouseButtonEvent event) {
+	public boolean mouseReleased(double mouseX, double mouseY, int button) {
+		return mouseReleased(new MouseButtonEvent(mouseX, mouseY, button));
+	}
+
+	private boolean mouseReleased(MouseButtonEvent event) {
 		event = correctForRenderScale(event);
 
 		dragCandidateWidget = null;
@@ -1988,7 +2008,7 @@ public class KubeUIScreen extends Screen {
 			return true;
 		}
 
-		return super.mouseReleased(event);
+		return super.mouseReleased(event.x(), event.y(), event.button());
 	}
 
 	@Override
@@ -2021,12 +2041,12 @@ public class KubeUIScreen extends Screen {
 	private Component styledText(String text) {
 		var component = Component.literal(text);
 		if (builder.customFont != null) {
-			component = component.withStyle(net.minecraft.network.chat.Style.EMPTY.withFont(new FontDescription.Resource(builder.customFont)));
+			component = component.withStyle(net.minecraft.network.chat.Style.EMPTY.withFont(builder.customFont));
 		}
 		return component;
 	}
 
-	private void playSound(Identifier id) {
+	private void playSound(ResourceLocation id) {
 		if (id == null) {
 			return;
 		}
@@ -2128,16 +2148,19 @@ public class KubeUIScreen extends Screen {
 	}
 
 	/// `"dirt"` is the only mode that wants the vanilla full-menu background path (dirt texture,
-	/// optional panorama, blur gated on the player's own option) - everything else (`"blur"`,
-	/// `"none"`, `"texture"`) draws its own simpler background in [#extractBackground] instead, the
-	/// same way an in-game HUD-ish screen (`isInGameUi() == true`) already would.
+	/// optional panorama, blur gated on the player's own option) - handled by the real
+	/// `renderBackground` override below calling `super.renderBackground(...)` before
+	/// [#extractBackground] ever runs. Everything else (`"blur"`, `"none"`, `"texture"`) draws its
+	/// own simpler background in [#extractBackground] instead.
 	@Override
-	public boolean isInGameUi() {
-		return !"dirt".equals(builder.backgroundMode);
+	public void renderBackground(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float a) {
+		if ("dirt".equals(builder.backgroundMode)) {
+			super.renderBackground(realGraphics, mouseX, mouseY, a);
+		}
+		extractBackground(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, a);
 	}
 
-	@Override
-	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+	private void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		switch (builder.backgroundMode) {
 			case "texture" -> {
 				if (builder.backgroundTexture != null) {
@@ -2146,10 +2169,12 @@ public class KubeUIScreen extends Screen {
 			}
 			case "blur" -> {
 				graphics.blurBeforeThisStratum();
-				extractTransparentBackground(graphics);
+				this.renderTransparentBackground(graphics.real());
 			}
-			case "none" -> extractTransparentBackground(graphics);
-			default -> super.extractBackground(graphics, mouseX, mouseY, a);
+			case "none" -> this.renderTransparentBackground(graphics.real());
+			default -> {
+				// "dirt" already handled above by the real renderBackground override.
+			}
 		}
 
 		extractWindowBackground(graphics);
@@ -2180,7 +2205,12 @@ public class KubeUIScreen extends Screen {
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+	public void render(net.minecraft.client.gui.GuiGraphics realGraphics, int mouseX, int mouseY, float delta) {
+		this.renderBackground(realGraphics, mouseX, mouseY, delta);
+		extractRenderState(new GuiGraphicsExtractor(realGraphics), mouseX, mouseY, delta);
+	}
+
+	private void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
 		boolean hasRenderScale = builder.renderScale != 1.0f && root != null;
 		boolean hasTransitionTransform = builder.animated && !"fade".equals(builder.animationType) && root != null;
 		boolean hasShake = shakeStartTime != 0 && System.currentTimeMillis() - shakeStartTime < SHAKE_DURATION_MS;
@@ -2242,7 +2272,9 @@ public class KubeUIScreen extends Screen {
 			}
 		}
 
-		super.extractRenderState(graphics, mouseX, mouseY, delta);
+		for (var renderable : this.renderables) {
+			renderable.render(graphics.real(), mouseX, mouseY, delta);
+		}
 
 		float alpha = Math.min(builder.animated ? animationEasedT() : 1f, crossFadeIn);
 		if (alpha < 1f) {

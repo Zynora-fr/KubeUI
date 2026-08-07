@@ -21,7 +21,7 @@ public final class KubeUIQuestHud {
 	}
 
 	static void receive(CompoundTag data) {
-		String questId = data.getStringOr("questId", "");
+		String questId = KubeUINbtCompat.getStringOr(data, "questId", "");
 		if (questId.isEmpty()) {
 			title = null;
 			objectives = List.of();
@@ -29,16 +29,16 @@ public final class KubeUIQuestHud {
 			return;
 		}
 
-		title = data.getStringOr("title", questId);
-		canComplete = data.getBooleanOr("canComplete", false);
+		title = KubeUINbtCompat.getStringOr(data, "title", questId);
+		canComplete = KubeUINbtCompat.getBooleanOr(data, "canComplete", false);
 
 		var entries = new ArrayList<Entry>();
-		for (var tag : data.getListOrEmpty("objectives")) {
+		for (var tag : data.getList("objectives", 10)) {
 			if (tag instanceof CompoundTag objectiveTag) {
 				entries.add(new Entry(
-					objectiveTag.getStringOr("label", ""),
-					objectiveTag.getIntOr("progress", 0),
-					objectiveTag.getIntOr("target", 1)
+					KubeUINbtCompat.getStringOr(objectiveTag, "label", ""),
+					KubeUINbtCompat.getIntOr(objectiveTag, "progress", 0),
+					KubeUINbtCompat.getIntOr(objectiveTag, "target", 1)
 				));
 			}
 		}
