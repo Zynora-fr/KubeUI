@@ -22,14 +22,18 @@ class KubeUIChart extends AbstractWidget implements KubeUINarratable {
 	private final List<Double> values;
 	private final List<String> labels;
 	private final Font font;
+	private final Integer styleColor;
+	private final Integer styleAccent;
 	private String narration;
 
-	KubeUIChart(int x, int y, int width, int height, String kind, List<Double> values, List<String> labels, Font font) {
+	KubeUIChart(int x, int y, int width, int height, String kind, List<Double> values, List<String> labels, Font font, Integer styleColor, Integer styleAccent) {
 		super(x, y, width, height, Component.literal("Chart"));
 		this.kind = kind;
 		this.values = values;
 		this.labels = labels;
 		this.font = font;
+		this.styleColor = styleColor;
+		this.styleAccent = styleAccent;
 	}
 
 	@Override
@@ -54,31 +58,37 @@ class KubeUIChart extends AbstractWidget implements KubeUINarratable {
 		}
 		max = Math.max(max, 1e-6);
 
+		int accent = styleAccent != null ? styleAccent : KubeUITheme.accentColor();
+		int text = styleColor != null ? styleColor : KubeUITheme.textColor();
+
 		if ("line".equals(kind)) {
-			renderLine(graphics, max, chartBottom, chartHeight);
+			renderLine(graphics, max, chartBottom, chartHeight, accent, text);
 		} else {
-			renderBars(graphics, max, chartBottom, chartHeight);
+			renderBars(graphics, max, chartBottom, chartHeight, accent);
 		}
 
 		if (hasLabels) {
 			int slotWidth = getWidth() / values.size();
 			for (int i = 0; i < labels.size() && i < values.size(); i++) {
 				int slotX = getX() + i * slotWidth;
-				graphics.centeredText(font, labels.get(i), slotX + slotWidth / 2, chartBottom + 1, KubeUITheme.textColor);
+				int lx = slotX + slotWidth / 2;
+				int ly = chartBottom + 1;
+				String label = labels.get(i);
+				KubeUIFontScale.draw(graphics, lx, ly, () -> graphics.centeredText(font, label, lx, ly, text));
 			}
 		}
 	}
 
-	private void renderBars(GuiGraphicsExtractor graphics, double max, int chartBottom, int chartHeight) {
+	private void renderBars(GuiGraphicsExtractor graphics, double max, int chartBottom, int chartHeight, int accent) {
 		int slotWidth = getWidth() / values.size();
 		for (int i = 0; i < values.size(); i++) {
 			int barHeight = (int) Math.round(values.get(i) / max * chartHeight);
 			int barX = getX() + i * slotWidth;
-			graphics.fill(barX + 1, chartBottom - barHeight, barX + slotWidth - 1, chartBottom, KubeUITheme.accentColor);
+			graphics.fill(barX + 1, chartBottom - barHeight, barX + slotWidth - 1, chartBottom, accent);
 		}
 	}
 
-	private void renderLine(GuiGraphicsExtractor graphics, double max, int chartBottom, int chartHeight) {
+	private void renderLine(GuiGraphicsExtractor graphics, double max, int chartBottom, int chartHeight, int accent, int text) {
 		int[] xs = new int[values.size()];
 		int[] ys = new int[values.size()];
 
@@ -98,12 +108,12 @@ class KubeUIChart extends AbstractWidget implements KubeUINarratable {
 				double t = (double) s / steps;
 				int px = x1 + (int) Math.round((x2 - x1) * t);
 				int py = y1 + (int) Math.round((y2 - y1) * t);
-				graphics.fill(px, py - 1, px + 1, py + 2, KubeUITheme.accentColor);
+				graphics.fill(px, py - 1, px + 1, py + 2, accent);
 			}
 		}
 
 		for (int i = 0; i < xs.length; i++) {
-			graphics.fill(xs[i] - POINT_SIZE / 2, ys[i] - POINT_SIZE / 2, xs[i] + POINT_SIZE / 2 + 1, ys[i] + POINT_SIZE / 2 + 1, KubeUITheme.textColor);
+			graphics.fill(xs[i] - POINT_SIZE / 2, ys[i] - POINT_SIZE / 2, xs[i] + POINT_SIZE / 2 + 1, ys[i] + POINT_SIZE / 2 + 1, text);
 		}
 	}
 

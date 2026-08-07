@@ -7,6 +7,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +31,36 @@ public final class KubeUISidebar {
 	/// Insertion order = display order, top to bottom.
 	private static final Map<String, KubeUISidebarIcon> ICONS = new LinkedHashMap<>();
 
+	/// Per-icon-id texture overrides (see [#setIconPack]) - checked before an icon's own
+	/// item/texture, so a resource pack (or a script standing in for one) can reskin the whole bar
+	/// in one call without every addon that registered an icon needing to cooperate.
+	private static final Map<String, Identifier> ICON_PACK = new HashMap<>();
+
+	/// Icon ids the server explicitly hid for this player (see [#setServerVisible]) - absence means
+	/// visible, the same "opt-in to hide, not opt-in to show" default `.requirePermission(...)`
+	/// widgets deliberately do the *opposite* of (those start hidden/disabled until confirmed,
+	/// since a widget is a potential action; a sidebar icon merely opening a menu is lower-stakes
+	/// and a server that never bothers calling this shouldn't have every icon vanish by default).
+	private static final java.util.Set<String> SERVER_HIDDEN = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
 	private KubeUISidebar() {
+	}
+
+	/// Overrides the rendered icon for every id present in `overrides` (icon id -> replacement
+	/// texture), regardless of whether that icon was originally registered via [#addItem] or
+	/// [#addTexture] - for reskinning the whole bar to match a resource pack in one call, without
+	/// every addon that registered an icon needing to cooperate. An id with no override keeps
+	/// rendering whatever it was registered with. Replaces any previous pack entirely (not merged).
+	public static void setIconPack(Map<String, Identifier> overrides) {
+		ICON_PACK.clear();
+		if (overrides != null) {
+			ICON_PACK.putAll(overrides);
+		}
+	}
+
+	/// Undoes [#setIconPack] - every icon goes back to rendering its own registered item/texture.
+	public static void clearIconPack() {
+		ICON_PACK.clear();
 	}
 
 	/// Adds (or replaces, keeping its original position) an icon rendered as a vanilla item, like
@@ -64,6 +94,19 @@ public final class KubeUISidebar {
 		ICONS.clear();
 	}
 
+	/// Called (via `KubeUINetworking`) when the server updates this player's visibility for
+	/// `iconId` - see `KubeUIActions.setSidebarIconVisible`. Not script-facing directly.
+	static void setServerVisible(String iconId, boolean visible) {
+		if (iconId == null) {
+			return;
+		}
+		if (visible) {
+			SERVER_HIDDEN.remove(iconId);
+		} else {
+			SERVER_HIDDEN.add(iconId);
+		}
+	}
+
 	/// Builds the actual clickable widgets, stacked vertically starting at `(x, y)` with `gap`
 	/// pixels between them - called by `KubeUISidebarInjector` (a different package, hence
 	/// `AbstractWidget`/`Minecraft` rather than the package-private [KubeUISidebarWidget]/
@@ -74,7 +117,10 @@ public final class KubeUISidebar {
 		int currentY = y;
 
 		for (var icon : ICONS.values()) {
-			widgets.add(new KubeUISidebarWidget(x, currentY, icon, font));
+			if (SERVER_HIDDEN.contains(icon.id())) {
+				continue;
+			}
+			widgets.add(new KubeUISidebarWidget(x, currentY, icon, font, ICON_PACK.get(icon.id())));
 			currentY += KubeUISidebarWidget.SIZE + gap;
 		}
 

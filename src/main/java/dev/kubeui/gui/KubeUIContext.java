@@ -247,6 +247,16 @@ public class KubeUIContext {
 		screen.rebuild();
 	}
 
+	/// A JSON snapshot of this screen's current widget tree - see [KubeUIScreenBuilder#toJson] for
+	/// exactly what's covered (a representative widget subset) and why. Meant for a scripter to
+	/// save two snapshots and diff them ("compare two versions of a screen without looking at it"),
+	/// not to be fed back into [KubeUIScreenBuilder#fromJson] as a live screen
+	/// (that round-trips a builder *before* it's opened, this reflects one already open and
+	/// possibly changed by `.update(...)`/widget interaction since).
+	public String dumpTree() {
+		return KubeUIScreenBuilder.toJson(screen.builder);
+	}
+
 	/// Gives the local player `count` of `item`, via the normal client -> server `/give` command
 	/// pipeline (same as typing it in chat) - so it's subject to the same permission checks as any
 	/// command (the player needs command access: cheats enabled in singleplayer, or operator in
@@ -270,6 +280,17 @@ public class KubeUIContext {
 	/// No-op (does nothing, not even a warning) if `action` isn't registered server-side.
 	public void runServerAction(String action, CompoundTag data) {
 		KubeUINetworking.sendAction(action, data);
+	}
+
+	/// Same as [#runServerAction(String, CompoundTag)], but `onAck(screen, success)` is called once
+	/// the server confirms the action actually ran (`success = true`) or explicitly didn't -
+	/// unregistered, throttled (see `KubeUIActions.register(id, throttleMs, ...)`), failed schema
+	/// validation, or the handler itself threw. Still fire-and-forget on the wire either way - this
+	/// just lets a script show "confirmed"/"failed" instead of assuming success silently. If the
+	/// reply never arrives (e.g. the player disconnects first), `onAck` simply never fires - no
+	/// timeout is tracked, so don't rely on it firing to release any resource.
+	public void runServerAction(String action, CompoundTag data, java.util.function.BiConsumer<KubeUIContext, Boolean> onAck) {
+		KubeUINetworking.sendAction(action, data, onAck);
 	}
 
 	/// Closes the screen - immediately, or after a fade-out if the screen used `.animated()`.

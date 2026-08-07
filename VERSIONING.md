@@ -1,6 +1,6 @@
 # Versioning
 
-KubeUI's own version (`mod_version` in [`gradle.properties`](gradle.properties), currently `0.1.0`)
+KubeUI's own version (`mod_version` in [`gradle.properties`](gradle.properties), currently `0.3.0`)
 follows [semver](https://semver.org/): `MAJOR.MINOR.PATCH`.
 
 - **MAJOR** - a breaking change to the *script-facing* API: a method removed/renamed, a signature
@@ -42,3 +42,14 @@ single codebase). Practically:
 Everything before `1.0.0` is explicitly unstable: any release, including a patch, may include a
 script-facing breaking change if it's needed to get the API right before committing to it long
 term.
+
+## Deprecation policy
+
+Once KubeUI reaches `1.0.0`, a script-facing method scheduled for removal is marked `@Deprecated`
+(with a doc comment pointing at its replacement) for at least one **MINOR** version before it's
+actually removed in a **MAJOR** bump - never removed in the same release it's first deprecated in.
+
+Before `1.0.0` this window doesn't apply - see "Pre-1.0" above, a pre-1.0 release may remove or
+change something without a deprecation period. Even then, a removal significant enough to surprise
+an existing script gets called out explicitly in [`CHANGELOG.md`](CHANGELOG.md), not left as a
+silent diff someone has to notice on their own.

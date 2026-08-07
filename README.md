@@ -16,6 +16,20 @@ supports all three at once:
 There is no Minecraft version where KubeJS publishes builds for all three loaders. KubeUI
 targets **Minecraft 26.1.2 / NeoForge**, matching KubeJS's current, actively maintained line.
 
+**If KubeJS ever ships Fabric again alongside NeoForge on the same Minecraft version**, the
+hardest parts of KubeUI to port would be, roughly in order: the real NeoForge networking layer
+(`CustomPacketPayload`/`PayloadRegistrar`/`PacketDistributor` - Fabric's networking API is shaped
+differently and would need a real rewrite, not a thin wrapper); the NeoForge `PermissionAPI`
+integration (`.requirePermission(...)`, `PermissionDynamicContextKey` - Fabric has no equivalent
+built-in, a Fabric build would need to either depend on a permissions mod directly or drop the
+feature); and `ModConfigSpec`-based config (`KubeUIConfig` - Fabric has no built-in config spec
+API, config would need a different library or hand-rolled TOML/JSON). Widget/layout code itself
+(`KubeUIScreenBuilder`/`KubeUIScreen`, built on vanilla `Screen`/`GuiGraphics`/layout classes) is
+comparatively loader-agnostic already, since those are Mojang classes both loaders wrap rather than
+replace. This is a written analysis for if the question ever comes up again, not a plan currently
+being acted on - see "Why NeoForge only?" above for why a real multi-loader build isn't happening
+right now regardless of how hard porting would be.
+
 ## Why this fills a real gap
 
 KubeJS's own built-in GUI system (`dev.latvian.mods.kubejs.gui`) only supports chest-style
@@ -74,6 +88,33 @@ callback) also exposes matching getters/setters for every stateful widget above:
 > `long`, not an `int`. A fully-opaque color literal like `0xFFff5555` is bigger than
 > `Integer.MAX_VALUE`, and Rhino won't silently wrap a JS number into a Java `int` the way Java's
 > own overflow rules would - it throws instead. `long` has enough range to accept the literal as-is.
+
+### Sharing reusable widget compositions
+
+There's no special "component" API for a reusable chunk of layout - a plain JS function that takes
+a builder and adds to it already works, since every `.xyz(...)` call returns the same builder to
+keep chaining:
+
+```js
+// A reusable piece, shareable as just this function (copy it into another script, or `require`/
+// import it if your setup supports JS modules) - not a KubeUI-specific format.
+function addHealthBar(b, current, max) {
+    return b
+        .label('hpLabel', 'HP: ' + current + ' / ' + max)
+        .progressBar('hpBar', current, max)
+}
+
+KubeUI.builder('Status')
+    .when(true, b => addHealthBar(b, 8, 20))
+    .button('Close', screen => screen.close())
+    .open()
+```
+
+This composes with `.when(...)`/`.repeat(...)` (see
+[Introspecting a screen from script code](#introspecting-a-screen-from-script-code)) the same way
+any other builder call does. There's no registry/marketplace of published compositions built into
+KubeUI itself - see [CONTRIBUTING.md](CONTRIBUTING.md) if you want to share one; for now that's a
+plain gist/repo/Discussion post, not a dedicated format this project maintains.
 
 ## Layout
 
@@ -201,7 +242,9 @@ KubeUI.builder('Dashboard')
 | `.sound(soundId)` | Plays a sound (in addition to the default click sound) when the last-added element is interacted with. Supported on `button`, `toggle`, `item`. |
 | `.custom(type, ...args)` | Adds a widget registered by a third-party **Java** mod via `KubeUIWidgets.register(type, factory)` (see [`KubeUIWidgetFactory`](src/main/java/dev/kubeui/gui/KubeUIWidgetFactory.java)) - not something a script defines itself. Shows a visible placeholder if `type` isn't registered. |
 | `KubeUI.builder(title, persistKey)` | Like `.builder(title)`, but text fields/sliders/toggles/etc. remember their values across separate `.open()` calls sharing the same `persistKey`. |
-| `KubeUI.setTheme(titleColor, accentColor, textColor)` / `KubeUI.resetTheme()` | Global colors (ARGB `long`s) applied to screens built from now on - only affects what KubeUI draws directly (title, progress bar fill); vanilla widgets keep their own sprites. |
+| `KubeUI.setTheme(titleColor, accentColor, textColor)` / `KubeUI.setTheme(name)` / `KubeUI.resetTheme()` | Global colors (ARGB `long`s, or a named preset - `"default"`/`"dark"`/`"light"`/`"high-contrast"`/one registered via `KubeUI.registerThemePreset(name, ...)`) applied to screens built from now on - only affects what KubeUI draws directly (title, progress bar fill); vanilla widgets keep their own sprites. Changing it while a screen is open fades over 300ms. See [Accessibility](#accessibility). |
+| `.style({color, accent})` | Overrides the color(s) the last-added element draws with, beyond the global theme - only has an effect on the handful of elements that already read theme colors directly (see [Accessibility](#accessibility)). |
+| `KubeUI.setFontScale(factor)` / `KubeUI.resetFontScale()` | Multiplies the size of *text only* (not box sizes) for KubeUI's own custom-drawn text, independent of `KubeUI.setScale(...)`. See [Accessibility](#accessibility). |
 
 ```js
 KubeUI.builder('Live Dashboard')
@@ -289,6 +332,7 @@ screen opens.
 | `KubeUISidebar.addItem(id, item, tooltip, onClick)` | Adds (or replaces, keeping its position) an icon rendered as a vanilla item, like an inventory slot. `tooltip` may be null/empty. |
 | `KubeUISidebar.addTexture(id, texture, tooltip, onClick)` | Same, but rendered from a custom resource-pack texture instead of an item. |
 | `KubeUISidebar.remove(id)` / `.clear()` | Removes one icon, or every icon. |
+| `KubeUISidebar.setIconPack(overrides)` / `.clearIconPack()` | Overrides the rendered icon (a texture) for every id present in `overrides`, regardless of how it was originally registered - for reskinning the whole bar in one call to match a resource pack, without every addon that registered an icon needing to cooperate. |
 
 ```js
 // client_scripts
@@ -307,15 +351,94 @@ to it regardless of window size.
 
 ## Debugging
 
-Four client-side commands (`net.neoforged.neoforge.client.event.RegisterClientCommandsEvent`,
+Client-side commands (`net.neoforged.neoforge.client.event.RegisterClientCommandsEvent`,
 same mechanism KubeJS uses for `/kubejs`):
 
 | Command | Effect |
 |---|---|
 | `/kubeui debug` | Prints a summary of the most recently opened KubeUI screen (title, tab/drag/resize/animated flags, per-type widget counts, every registered id). Reports on the *last* screen, not the currently-open one - typing a command closes whatever screen was open first. |
 | `/kubeui scale [factor]` | With no argument, reports the current [scale](#responsive-sizing--scale). With one (`0.5`-`2.0`), sets it - lets a *player* shrink/grow every KubeUI screen themselves, without needing script support. Already-open screens need to be closed and reopened to pick up a new scale. |
+| `/kubeui fontscale [factor]` | Same as `/kubeui scale`, but text-only - see [`setFontScale`](#accessibility). |
+| `/kubeui theme preview <name>` | Applies a named [theme preset](#accessibility) for a few seconds, then reverts automatically - try one before committing to it with a script. |
 | `/kubeui outline` | Toggles a magenta bounding-box outline around every visible widget on KubeUI screens, for debugging layout. |
+| `/kubeui grid` | Toggles a layout debug grid with pixel dimensions, on top of the outline. |
 | `/kubeui screenshot` | Takes a screenshot via the same mechanism as F2. |
+| `/kubeui export` / `/kubeui import` | Moves a player's KubeUI preferences (scale/font scale/theme defaults, window positions) to/from a portable file - see [`KubeUIPreferences`](src/main/java/dev/kubeui/gui/KubeUIPreferences.java). |
+| `/kubeui reload-config` | Reports the config values currently in effect (`config/kubeui-common.toml` auto-reloads on external edits already - this doesn't trigger anything, just confirms an edit took). |
+| `/kubeui editor` | Opens an in-game file manager/editor for `kubejs/client_scripts` - list, create, open, edit and delete `.js` files without leaving the game, "Save & Reload" to see a change live. |
+| `/kubeui profile` | Reports how long the most recently built KubeUI screen took to construct, and how many widgets it has. |
+| `/kubeui stresstest` | Builds and opens 30 synthetic 40-widget screens back to back, reports total/average build time - an on-demand load test. |
+
+### Introspecting a screen from script code
+
+- `.when(condition, b => b.button(...))` - runs the callback against this same builder only if
+  `condition` is true, an alternative to breaking a fluent chain with a bare `if`.
+- `.repeat(count, (b, i) => ...)` - calls the callback `count` times; a lighter [`.list(...)`](#layout)
+  when there's no real array to iterate, just a repeated shape.
+- `KubeUI.describe(builder)` - a human-readable, indented listing of every element's type and id in
+  `builder`, for debugging or generating docs from a screen instead of writing them by hand.
+- `KubeUI.lint(builder)` - returns a list of issues detectable from the already-built entry tree
+  (today: duplicate element ids) - callable before `.open()` is ever reached.
+- `KubeUI.toJson(builder)` / `KubeUI.fromJson(json)` - JSON export/import of a screen's *layout*,
+  covering a representative widget subset (label, button, toggle, textField, slider, number,
+  divider, spacer, row, grid) rather than the full catalog. Callbacks can't survive a round trip
+  through JSON (they're JS closures, not data) - `fromJson` rebuilds every interactive element with
+  a no-op callback for the script to fill back in.
+- `screen.dumpTree()` - a JSON snapshot of a currently-open screen's widget tree (same format/scope
+  as `toJson`), meant for saving two snapshots and diffing them rather than feeding back into
+  `fromJson`.
+
+## Accessibility
+
+What's covered, and its known limits - so a scripter knows what they can rely on without having to
+read the source to find out.
+
+**Covered:**
+
+- **Narration (screen readers).** Every interactive vanilla widget (button, toggle, text field,
+  dropdown, ...) narrates its own label/value automatically - that's Minecraft's own behavior, not
+  something KubeUI adds. Every KubeUI-custom-drawn widget (rating, badge, table, chart, minimap,
+  range slider, keybind capture, ...) implements its own narration too, overridable per-element via
+  `.narration(text)` / `.narrationKey(langKey, fallbackText)`.
+- **Keyboard navigation.** Tab cycles focus through every widget on a screen (wraps around both
+  ways - vanilla's own Tab handling doesn't, KubeUI patches it); `.tabOrder(n)` sets an explicit
+  group where the default (visual-position-based for absolute-positioned elements, declared order
+  otherwise) isn't what's wanted. Every custom KubeUI widget that's actually interactive - rating,
+  range slider, keybind capture, list-select checkbox, table, the drag-and-drop/context-menu
+  system - is fully operable from the keyboard alone (arrow keys / Enter / Space), not just the
+  mouse, and draws a visible focus outline so a keyboard user can see where they are.
+- **Color & contrast.** `KubeUI.setTheme("high-contrast")` (or `"dark"`/`"light"`/a custom preset
+  via `KubeUI.registerThemePreset(...)`) recolors everything KubeUI draws directly; changing it
+  mid-session fades rather than snaps. `.colorPicker(...)`'s default swatch palette is the Okabe &
+  Ito colorblind-safe set, not arbitrary saturated hues. `.style({color, accent})` overrides a
+  single element beyond the theme.
+- **Text size.** `KubeUI.setFontScale(factor)` / `/kubeui fontscale` enlarges text independently of
+  box sizes, for KubeUI's own custom-drawn text (`.richText()`, `.table()`, `.chart()`'s labels,
+  `.rangeSlider()`, `.keybindCapture()`, `.progressBar()`'s percentage).
+- **Sound captions.** `.sound(soundId)` plays through the real vanilla `SoundManager`, so
+  Minecraft's own "Show Subtitles" option already captions it automatically - no KubeUI-side code
+  needed - *provided* `soundId` resolves to a sound event that actually has a `subtitle` key in a
+  loaded `sounds.json` (true for vanilla/registered sounds; an arbitrary made-up id won't caption,
+  the same way it wouldn't in vanilla either).
+- **Translated text.** Beyond `.labelKey(id, langKey, fallbackText)`, every other single-string
+  builder method that takes literal text has a `Key`-suffixed twin resolved from the language file
+  the same way: `.buttonKey`, `.toggleKey`, `.textFieldKey`/`.textAreaKey` (hint only - field
+  *content* is real data, not translated), `.tooltipKey`, `.narrationKey`, `.badgeKey`.
+
+**Known limits:**
+
+- **No right-to-left layout.** Minecraft's own `GridLayout`/text rendering have no mirroring
+  support to build on - a widget tree built left-to-right can't be flipped without a custom layout
+  engine, which is out of scope.
+- **No colorblind simulation mode.** A real (not approximated) simulation needs a GPU
+  post-processing pass (like vanilla's own nausea/creeper-vision effects), which nothing in KubeUI
+  currently sets up - `/kubeui theme preview <name>` (via `"high-contrast"`) is the closest
+  built-in tool for checking a screen's colors.
+- **Vanilla widgets aren't recolorable/rescalable from outside.** `.style(...)`,
+  `KubeUI.setTheme(...)` and `KubeUI.setFontScale(...)` only affect what KubeUI draws directly -
+  a `.button()`/`.toggle()`/`.textField()`/dropdown's own text/sprites are Minecraft's, not
+  KubeUI's, to recolor or rescale (the same limitation `.narration(...)` already documents for
+  those widget types).
 
 ## Extending KubeUI from Java
 
@@ -327,6 +450,64 @@ KubeUIWidgets.register("mymod:cool_widget", ctx -> new MyCoolWidget(ctx.width, c
 
 Scripts then use it like any built-in widget: `.custom("mymod:cool_widget", ...args)`. See
 [`KubeUIWidgetFactory`](src/main/java/dev/kubeui/gui/KubeUIWidgetFactory.java).
+
+## Compatibility
+
+**Other KubeJS-UI addons.** Every global KubeUI binds (`KubeUI`, `KubeUISidebar`,
+`KubeUIScreenInjector`, `KubeUIRemoteScreens`) is namespaced under the `KubeUI` prefix specifically
+to stay out of the way of another addon's own globals - two addons only collide if they both choose
+the exact same global name, which a `KubeUI`-prefixed one is unlikely to. Widget/element ids are
+scoped per-screen (a builder's own `entries`), not shared mod-wide, so two different mods' screens
+can reuse the same id strings freely. `.custom(...)` widget type names (see above) follow the same
+`modid:name` convention as everything else Minecraft/NeoForge namespaces, so two mods registering
+custom widgets can't collide either as long as each uses its own mod id as the prefix.
+
+**Config screen.** KubeUI registers a real NeoForge `IConfigScreenFactory`, so the "Config" button
+next to KubeUI in the vanilla Mods list opens a working settings screen - no separate mod (e.g. a
+Fabric-only "mod menu"-style addon, which wouldn't apply to a NeoForge-only project) is involved.
+
+**JEI/REI, resource packs, shader packs, other content mods.** Not validated against real
+installs of any of these in this project's own dev/CI environment (none are dependencies here) -
+KubeUI doesn't intercept input in a way that should conflict with an item-browsing overlay (Esc
+closes a KubeUI screen normally, no aggressive global scissor/rendering hijack), and its custom
+widgets render through the same `Identifier`-keyed textures/vanilla text rendering a resource pack
+or shader pack already knows how to handle - but neither claim has been exercised against a real
+install. Genuinely testing this needs an environment with those mods actually present.
+
+| Tested with | Status | Notes |
+|---|---|---|
+| KubeJS (required dependency) | ✅ Works | The whole point - see [Versions](#versions) for the exact tested version. |
+| JEI / REI | ❔ Not validated | Not installed in this project's dev/CI environment - see above. |
+| Other KubeJS-UI addons | ❔ Not validated | No known collisions by design (see above), not exercised against a real second addon. |
+| Resource packs | ❔ Not validated | Widgets use real `Identifier` textures, should be overridable in principle - not confirmed against an actual pack. |
+| Shader packs (Iris/OptiFine-like) | ❔ Not validated | No custom shaders/post-processing of its own that would obviously conflict - not confirmed against a real shader pack. |
+
+A dedicated compatibility page separate from this README isn't warranted yet - this table is
+short enough to live here until it has more than a handful of genuinely-tested rows.
+
+## Community & ecosystem
+
+- **Discussion/feedback:** [GitHub Discussions](https://github.com/Zynora-fr/KubeUI/discussions) -
+  the **Ideas** category (with reactions already enabled by GitHub by default) is the place to
+  react/comment on a roadmap idea instead of opening an issue for it; see
+  [SUPPORT.md](SUPPORT.md) for the rest.
+- **"Made with KubeUI" badge:** if your project uses KubeUI, you're welcome to link back to it from
+  your own Modrinth page/README with a plain badge - there's no official image asset for this yet,
+  a simple `[Made with KubeUI](https://github.com/Zynora-fr/KubeUI)` link or a
+  [shields.io](https://shields.io) badge (e.g. `https://img.shields.io/badge/Made%20with-KubeUI-blue`)
+  both work fine; nothing to register or ask permission for.
+- **Community showcase / example registry:** not built yet - there isn't a real body of published
+  third-party KubeUI scripts/projects to list honestly, so a showcase page or example registry
+  would be an empty shell right now. Worth revisiting once that changes.
+- **Starter template:** [`templates/starter/`](templates/starter/) is a minimal, working
+  `client_scripts`/`server_scripts` layout to clone/copy as a new KubeUI project's starting point,
+  or generate with `node scripts/create-kubeui-script.js <target-dir>` - see its own README.
+- **Step-by-step tutorial:** [`TUTORIAL.md`](TUTORIAL.md) walks through building a complete screen
+  from nothing, for a scripter who's never touched KubeUI before.
+- **Advanced reference example:** [`testkubejs/server_scripts/kubeui_quest_board_example.js`](testkubejs/server_scripts/kubeui_quest_board_example.js)
+  (+ its client half) is a small but complete server-authoritative system (a quest board with
+  real state, not just a UI mockup) built with KubeUI, meant to be read as a bigger worked example
+  than the targeted `testkubejs/` demo scripts.
 
 ## Project layout
 
@@ -401,10 +582,10 @@ works the same whether or not the client has focus grabbed by something else:
   This is the only script with an auto-open trigger; the other four just define their
   `openXxx()` function and wait to be called from here (or from `/kubejs run openXxx()`).
 - [`client_scripts/kubeui_test.js`](testkubejs/client_scripts/kubeui_test.js) - every widget
-  (Phases 1-12) and layout feature (row/grid/scrollPanel/list/anchor, Phases 13-20).
+  and layout feature (row/grid/scrollPanel/list/anchor).
 - [`client_scripts/kubeui_test_ux.js`](testkubejs/client_scripts/kubeui_test_ux.js) - tabs,
   draggable/resizable windows, tooltips, enable/visible toggling, add/remove after open, and
-  confirm/alert dialogs (Phases 21-30).
+  confirm/alert dialogs.
 - [`client_scripts/kubeui_test_shop.js`](testkubejs/client_scripts/kubeui_test_shop.js) - an item
   shop: clickable item icons (tooltip + click sound), a scrollable list built from a plain JS
   array (`SHOP_ITEMS`), a gold counter kept live via `.bind()`, a toggle that survives reopening
@@ -450,5 +631,7 @@ Edit these scripts directly to try out changes - `run/kubejs/` is re-synced (not
 [MIT](LICENSE). Versioning policy (what counts as a breaking vs. additive change, and how a new
 Minecraft version is handled) is in [VERSIONING.md](VERSIONING.md). Contributing guidelines and
 issue templates are in [CONTRIBUTING.md](CONTRIBUTING.md); support/questions go through
-[SUPPORT.md](SUPPORT.md)'s channels. Releases are tagged (`vX.Y.Z`) and published to
-for ideas deliberately deferred past it.
+[SUPPORT.md](SUPPORT.md)'s channels. Releases are tagged (`vX.Y.Z`) and published to GitHub
+Releases, Modrinth, and CurseForge automatically (see
+[`release.yml`](.github/workflows/release.yml)). [CHANGELOG.md](CHANGELOG.md) has what's actually
+shipped release to release.

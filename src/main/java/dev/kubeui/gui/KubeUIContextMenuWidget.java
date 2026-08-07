@@ -5,6 +5,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
@@ -23,6 +24,7 @@ class KubeUIContextMenuWidget extends AbstractWidget implements KubeUINarratable
 	private final List<String> items;
 	private final IntConsumer onSelect;
 	private String narration;
+	private int highlightedRow = 0;
 
 	KubeUIContextMenuWidget(int x, int y, List<String> items, Font font, IntConsumer onSelect) {
 		super(x, y, width(items, font), items.size() * ROW_HEIGHT + PADDING * 2, Component.literal("Context menu"));
@@ -56,12 +58,33 @@ class KubeUIContextMenuWidget extends AbstractWidget implements KubeUINarratable
 		}
 	}
 
+	/// Up/Down moves the highlighted row, Enter/Space selects it - this widget is a single
+	/// `AbstractWidget` standing in for what's conceptually a list of options, so unlike a real
+	/// list of separately-focusable `Button`s, keyboard navigation between "rows" has to be
+	/// implemented here by hand rather than inherited from Tab-focus order.
+	@Override
+	public boolean keyPressed(KeyEvent event) {
+		if (event.isUp()) {
+			highlightedRow = Math.max(0, highlightedRow - 1);
+			return true;
+		}
+		if (event.isDown()) {
+			highlightedRow = Math.min(items.size() - 1, highlightedRow + 1);
+			return true;
+		}
+		if (event.isSelection() && highlightedRow >= 0 && highlightedRow < items.size()) {
+			onSelect.accept(highlightedRow);
+			return true;
+		}
+		return false;
+	}
+
 	@Override
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0xF0202020);
 		graphics.outline(getX(), getY(), getWidth(), getHeight(), 0xFF45D6C9);
 
-		int hoveredRow = isMouseOver(mouseX, mouseY) ? rowAt(mouseY) : -1;
+		int hoveredRow = isMouseOver(mouseX, mouseY) ? rowAt(mouseY) : highlightedRow;
 
 		for (int i = 0; i < items.size(); i++) {
 			int rowY = getY() + PADDING + i * ROW_HEIGHT;

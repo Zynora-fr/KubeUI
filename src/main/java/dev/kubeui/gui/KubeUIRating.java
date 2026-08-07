@@ -5,6 +5,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
@@ -59,6 +60,19 @@ class KubeUIRating extends AbstractWidget implements KubeUINarratable {
 		onChange.accept(context, value);
 	}
 
+	/// Left/Right adjusts by one star - added alongside the new focus outline ([KubeUIFocusOutline])
+	/// since a widget a keyboard user can now clearly see is focused should also be operable by
+	/// keyboard, not just visually highlighted.
+	@Override
+	public boolean keyPressed(KeyEvent event) {
+		if (!active || !(event.isLeft() || event.isRight())) {
+			return false;
+		}
+		value = KubeUILayoutMath.clampInt(value + (event.isRight() ? 1 : -1), 1, max);
+		onChange.accept(context, value);
+		return true;
+	}
+
 	@Override
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		int hoverStar = active && isHovered() ? (int) ((mouseX - getX()) / STAR_SIZE) + 1 : -1;
@@ -68,6 +82,8 @@ class KubeUIRating extends AbstractWidget implements KubeUINarratable {
 			int color = filled ? 0xFFFFD700 : 0xFF6B7679;
 			graphics.text(font, String.valueOf(filled ? FILLED : EMPTY), getX() + i * STAR_SIZE, getY() + 1, color, false);
 		}
+
+		KubeUIFocusOutline.draw(graphics, this);
 	}
 
 	@Override

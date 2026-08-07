@@ -4,6 +4,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
@@ -39,13 +40,30 @@ class KubeUIListSelectCheckbox extends AbstractWidget implements KubeUINarratabl
 
 	@Override
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
-		if (event.hasShiftDown() && state.lastToggled != null) {
+		toggle(event.hasShiftDown(), event.hasControlDown());
+	}
+
+	/// Enter/Space toggles this row - added alongside the new focus outline ([KubeUIFocusOutline])
+	/// since a widget a keyboard user can now clearly see is focused should also be operable by
+	/// keyboard, not just visually highlighted. Shift/Ctrl work the same as their mouse-click
+	/// equivalents (see [#onClick]) since [KeyEvent] exposes the same modifier accessors.
+	@Override
+	public boolean keyPressed(KeyEvent event) {
+		if (!event.isSelection()) {
+			return false;
+		}
+		toggle(event.hasShiftDown(), event.hasControlDown());
+		return true;
+	}
+
+	private void toggle(boolean shift, boolean control) {
+		if (shift && state.lastToggled != null) {
 			int from = Math.min(state.lastToggled, index);
 			int to = Math.max(state.lastToggled, index);
 			for (int i = from; i <= to; i++) {
 				state.selected.add(i);
 			}
-		} else if (event.hasControlDown()) {
+		} else if (control) {
 			if (!state.selected.add(index)) {
 				state.selected.remove(index);
 			}
@@ -68,8 +86,9 @@ class KubeUIListSelectCheckbox extends AbstractWidget implements KubeUINarratabl
 		boolean checked = state.selected.contains(index);
 		graphics.outline(getX(), getY(), SIZE, SIZE, isHovered() ? 0xFFEAF3F3 : 0xFF6B7679);
 		if (checked) {
-			graphics.fill(getX() + 2, getY() + 2, getX() + SIZE - 2, getY() + SIZE - 2, KubeUITheme.accentColor);
+			graphics.fill(getX() + 2, getY() + 2, getX() + SIZE - 2, getY() + SIZE - 2, KubeUITheme.accentColor());
 		}
+		KubeUIFocusOutline.draw(graphics, this);
 	}
 
 	@Override

@@ -13,13 +13,15 @@ class KubeUIProgressBar extends AbstractWidget implements KubeUINarratable {
 	private double value;
 	private double max;
 	private String narration;
+	private final Integer styleAccent;
 
-	KubeUIProgressBar(int x, int y, int width, int height, double value, double max, Font font) {
+	KubeUIProgressBar(int x, int y, int width, int height, double value, double max, Font font, Integer styleAccent) {
 		super(x, y, width, height, Component.empty());
 		this.active = false;
 		this.value = value;
 		this.max = max;
 		this.font = font;
+		this.styleAccent = styleAccent;
 	}
 
 	double value() {
@@ -52,7 +54,7 @@ class KubeUIProgressBar extends AbstractWidget implements KubeUINarratable {
 		double ratio = max > 0 ? Math.min(1.0, Math.max(0.0, value / max)) : 0.0;
 		int filledX = x0 + (int) ((x1 - x0) * ratio);
 		if (filledX > x0) {
-			graphics.fill(x0, y0, filledX, y1, KubeUITheme.accentColor);
+			graphics.fill(x0, y0, filledX, y1, styleAccent != null ? styleAccent : KubeUITheme.accentColor());
 		}
 
 		graphics.fill(x0, y0, x1, y0 + 1, 0xFF1E1E1E);
@@ -60,7 +62,10 @@ class KubeUIProgressBar extends AbstractWidget implements KubeUINarratable {
 		graphics.fill(x0, y0, x0 + 1, y1, 0xFF1E1E1E);
 		graphics.fill(x1 - 1, y0, x1, y1, 0xFF1E1E1E);
 
-		graphics.centeredText(font, Math.round(ratio * 100) + "%", x0 + getWidth() / 2, y0 + (getHeight() - 8) / 2, 0xFFFFFFFF);
+		String pct = Math.round(ratio * 100) + "%";
+		int lx = x0 + getWidth() / 2;
+		int ly = y0 + (getHeight() - 8) / 2;
+		KubeUIFontScale.draw(graphics, lx, ly, () -> graphics.centeredText(font, pct, lx, ly, 0xFFFFFFFF));
 	}
 
 	@Override

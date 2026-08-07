@@ -22,6 +22,10 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FontDescription;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -35,9 +39,11 @@ import org.lwjgl.glfw.GLFW;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -67,8 +73,12 @@ public class KubeUIScreen extends Screen {
 	private static final int NON_DRAGGABLE_TITLE_RESERVE = 24; // room for the fixed title text drawn at y=12 (see extractRenderState)
 	private static final int RESIZE_HANDLE_SIZE = 8;
 	private static final int MINIMIZE_BUTTON_SIZE = 12;
+	// Okabe & Ito's "Color Universal Design" palette (2008) - chosen to stay distinguishable under
+	// protanopia/deuteranopia/tritanopia simulation, unlike the arbitrary saturated hues this
+	// replaced. White/grey/black bookends kept from the original set (neutrals are colorblind-safe
+	// by construction - no hue to confuse).
 	private static final int[] COLOR_PALETTE = {
-		0xFFFFFF, 0xFF5555, 0xFFAA00, 0xFFFF55, 0x55FF55, 0x55FFFF, 0x5555FF, 0xAA00AA, 0x999999, 0x000000
+		0xFFFFFF, 0xE69F00, 0x56B4E9, 0x009E73, 0xF0E442, 0x0072B2, 0xD55E00, 0xCC79A7, 0x999999, 0x000000
 	};
 
 	final KubeUIScreenBuilder builder;
@@ -101,6 +111,9 @@ public class KubeUIScreen extends Screen {
 	final Map<AbstractWidget, Consumer<KubeUIContext>> doubleClickHandlers = new HashMap<>();
 	final Map<AbstractWidget, HoverPreviewSpec> hoverPreviews = new HashMap<>();
 	final Map<AbstractWidget, Long> hoverStartTimes = new HashMap<>();
+	final Map<AbstractWidget, String> permissionGatedWidgets = new HashMap<>();
+	private final Map<String, Boolean> permissionCache = new HashMap<>();
+	private final Set<String> pendingPermissionGates = new HashSet<>();
 	final Map<EditBox, java.util.Deque<String>> undoStacks = new HashMap<>();
 	final Map<EditBox, java.util.Deque<String>> redoStacks = new HashMap<>();
 	final Map<EditBox, String> lastKnownValues = new HashMap<>();
@@ -203,6 +216,10 @@ public class KubeUIScreen extends Screen {
 		rebuild();
 		KubeUIDebug.trackOpened(this);
 
+		if (builder.screenId != null && Minecraft.getInstance().player != null) {
+			KubeUINetworking.sendScreenState(builder.screenId, true);
+		}
+
 		if (builder.onOpenCallback != null) {
 			builder.onOpenCallback.accept(context);
 		}
@@ -238,7 +255,16 @@ public class KubeUIScreen extends Screen {
 	/// [KubeUIContext#update] - never by a plain state change (see class docs). The scroll part
 	/// matters a lot for `.reorderableList(...)`, which calls this on every drag step that moves a
 	/// row: without restoring it, a rebuild while scrolled down would snap back to the top mid-drag.
+	/// Times every [#rebuildInternal] call (backs `/kubeui profile`) - a thin wrapper rather
+	/// than instrumenting the body in place, so every existing call site (tab switches,
+	/// [KubeUIContext#update], `.init()`, ...) keeps working unchanged.
 	void rebuild() {
+		long start = System.nanoTime();
+		rebuildInternal();
+		KubeUIDebug.recordBuild(System.nanoTime() - start, allWidgets.size());
+	}
+
+	private void rebuildInternal() {
 		double savedScrollAmount = captureScrollAmount(root);
 
 		clearWidgets();
@@ -356,7 +382,17 @@ public class KubeUIScreen extends Screen {
 		// Positioned relative to the content area (not the raw screen), and added after every
 		// normal-flow widget so they naturally paint on top - sorted by zIndex among themselves,
 		// for elements that intentionally overlap each other too (a badge on another absolute icon).
-		absoluteWidgets.sort(Comparator.comparingInt(AbsoluteWidgetSpec::zIndex));
+		// zIndex ties (the common case - most scripts never bother setting one) break by visual
+		// position (top-to-bottom, then left-to-right) instead of declaration order: since add
+		// order here also becomes Tab-focus tie-break order (vanilla's own stable sort on
+		// `tabOrderGroup`, which every widget here defaults to unless `.tabOrder(...)` said
+		// otherwise), an arbitrary declaration-order default would tab-navigate in a way that has
+		// nothing to do with what's actually on screen.
+		absoluteWidgets.sort(
+			Comparator.comparingInt(AbsoluteWidgetSpec::zIndex)
+				.thenComparingInt(AbsoluteWidgetSpec::y)
+				.thenComparingInt(AbsoluteWidgetSpec::x)
+		);
 		for (var spec : absoluteWidgets) {
 			spec.widget().setX(root.getX() + spec.x());
 			spec.widget().setY(root.getY() + spec.y());
@@ -372,6 +408,74 @@ public class KubeUIScreen extends Screen {
 			allWidgets.add(minimizeButton);
 		}
 		allWidgets.addAll(absoluteWidgets.stream().map(AbsoluteWidgetSpec::widget).toList());
+
+		applyKnownPermissions();
+		requestMissingPermissions();
+	}
+
+	/// `.requirePermission(gate)` widgets start disabled (see [#applyCommonStyle]) - this
+	/// re-enables whichever ones this screen already has a cached answer for, so a `rebuild()`
+	/// after the first check response doesn't have to wait on the network again.
+	private void applyKnownPermissions() {
+		permissionGatedWidgets.forEach((widget, gate) -> {
+			Boolean known = permissionCache.get(gate);
+			if (known != null) {
+				widget.active = known;
+			}
+		});
+	}
+
+	/// Sends one batched check (see [KubeUIActions#PERMISSION_CHECK_ACTION]) for every distinct
+	/// gate on this screen that isn't already cached or already in flight - never one request per
+	/// widget, and never a repeat request for a gate this screen already asked about.
+	private void requestMissingPermissions() {
+		if (permissionGatedWidgets.isEmpty() || Minecraft.getInstance().player == null) {
+			return;
+		}
+
+		var toRequest = new HashSet<String>();
+		for (String gate : permissionGatedWidgets.values()) {
+			if (!permissionCache.containsKey(gate) && pendingPermissionGates.add(gate)) {
+				toRequest.add(gate);
+			}
+		}
+		if (toRequest.isEmpty()) {
+			return;
+		}
+
+		var gates = new ListTag();
+		for (String gate : toRequest) {
+			gates.add(StringTag.valueOf(gate));
+		}
+		var data = new CompoundTag();
+		data.put("gates", gates);
+		KubeUINetworking.sendAction(KubeUIActions.PERMISSION_CHECK_ACTION, data);
+	}
+
+	/// Called (via [KubeUINetworking]) once the server replies to a [#requestMissingPermissions]
+	/// batch - `results` maps each requested gate name to whether this player has it.
+	void applyPermissionResults(CompoundTag results) {
+		for (String gate : results.keySet()) {
+			permissionCache.put(gate, results.getBooleanOr(gate, false));
+			pendingPermissionGates.remove(gate);
+		}
+		applyKnownPermissions();
+	}
+
+	/// Dispatches a permission-check response (see [#applyPermissionResults]) to whichever
+	/// currently-displayed screen(s) it's for - a plain screen, or every window of a
+	/// [KubeUIMultiWindowHost] if `.nonModal()` ones are open. A screen not (or no longer) among
+	/// them just never gets its pending gates resolved - harmless, its widgets simply stay
+	/// disabled, the same as if the response had been lost.
+	static void receivePermissionResults(CompoundTag results) {
+		var screen = Minecraft.getInstance().screen;
+		if (screen instanceof KubeUIScreen kubeUIScreen) {
+			kubeUIScreen.applyPermissionResults(results);
+		} else if (screen instanceof KubeUIMultiWindowHost host) {
+			for (var window : host.windows()) {
+				window.applyPermissionResults(results);
+			}
+		}
 	}
 
 	/// 0 if `layout` isn't scrollable (or is null, e.g. the very first build). `ScrollableLayout`
@@ -465,6 +569,7 @@ public class KubeUIScreen extends Screen {
 		doubleClickHandlers.clear();
 		hoverPreviews.clear();
 		hoverStartTimes.clear();
+		permissionGatedWidgets.clear();
 		undoStacks.clear();
 		redoStacks.clear();
 		lastKnownValues.clear();
@@ -517,6 +622,10 @@ public class KubeUIScreen extends Screen {
 
 		if (builder.persistKey != null) {
 			savePersistedState();
+		}
+
+		if (builder.screenId != null && Minecraft.getInstance().player != null) {
+			KubeUINetworking.sendScreenState(builder.screenId, false);
 		}
 
 		if (builder.onCloseCallback != null) {
@@ -664,6 +773,9 @@ public class KubeUIScreen extends Screen {
 			// asking for trouble) - drag offset isn't tied to any one widget, unlike everything else here.
 			state.put("__dragOffsetX", dragOffsetX);
 			state.put("__dragOffsetY", dragOffsetY);
+			// Also written to disk (KubeUIScreenBuilder.PERSISTED above is in-memory only, cleared
+			// on JVM restart) - real cross-launch persistence, see KubeUIWindowPositions.
+			KubeUIWindowPositions.set(builder.persistKey, dragOffsetX, dragOffsetY);
 		}
 
 		KubeUIScreenBuilder.PERSISTED.put(builder.persistKey, state);
@@ -672,9 +784,16 @@ public class KubeUIScreen extends Screen {
 	/// Extension of the same `persistKey` mechanism [#savePersistedState] already uses for widget
 	/// values, to a `.draggable()` window's last dragged-to position - restored once, before the
 	/// first `rebuild()`, so it survives closing and reopening a screen that shares a `persistKey`.
+	/// Prefers the in-memory value (same session, cheap) and falls back to the on-disk one (see
+	/// [#savePersistedState]) so the position also survives a full game restart, not just a
+	/// close/reopen within the same session.
 	private void restorePersistedDragPosition() {
 		if (persisted("__dragOffsetX") instanceof Integer x) {
 			dragOffsetX = x;
+		} else if (KubeUIWindowPositions.get(builder.persistKey) instanceof int[] saved) {
+			dragOffsetX = saved[0];
+			dragOffsetY = saved[1];
+			return;
 		}
 		if (persisted("__dragOffsetY") instanceof Integer y) {
 			dragOffsetY = y;
@@ -838,6 +957,15 @@ public class KubeUIScreen extends Screen {
 
 		if (style.hoverPreviewDelayMs != null && style.hoverPreviewBuilder != null) {
 			element.visitWidgets(w -> hoverPreviews.put(w, new HoverPreviewSpec(style.hoverPreviewDelayMs, style.hoverPreviewBuilder)));
+		}
+
+		if (style.requiredPermission != null) {
+			element.visitWidgets(w -> {
+				if (w instanceof AbstractWidget widget) {
+					permissionGatedWidgets.put(widget, style.requiredPermission);
+					widget.active = false;
+				}
+			});
 		}
 	}
 
@@ -1069,8 +1197,24 @@ public class KubeUIScreen extends Screen {
 					playSound(sound);
 				});
 			}
+			case KubeUIScreenBuilder.RecipeSlotElement e -> {
+				Identifier sound = entry.style.clickSound;
+				var onClick = e.onClick();
+				var stacks = new java.util.ArrayList<net.minecraft.world.item.ItemStack>();
+				for (String itemId : e.itemIds()) {
+					var itemIdentifier = Identifier.tryParse(itemId);
+					var item = itemIdentifier != null ? net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(itemIdentifier) : null;
+					if (item != null) {
+						stacks.add(new net.minecraft.world.item.ItemStack(item));
+					}
+				}
+				yield new KubeUIRecipeSlotWidget(0, 0, stacks, font, onClick == null ? null : ev -> {
+					onClick.accept(context);
+					playSound(sound);
+				});
+			}
 			case KubeUIScreenBuilder.ProgressBarElement e -> {
-				var widget = new KubeUIProgressBar(0, 0, resolveWidth(entry, owner.elementWidth), resolveHeight(entry, PROGRESS_HEIGHT), e.value(), e.max(), font);
+				var widget = new KubeUIProgressBar(0, 0, resolveWidth(entry, owner.elementWidth), resolveHeight(entry, PROGRESS_HEIGHT), e.value(), e.max(), font, entry.style.styleAccent);
 				progressBars.put(e.id(), widget);
 				yield widget;
 			}
@@ -1090,7 +1234,7 @@ public class KubeUIScreen extends Screen {
 				yield new KubeUIRichText(0, 0, width, height, e.text(), font, onClick == null ? null : ev -> {
 					onClick.accept(context);
 					playSound(sound);
-				});
+				}, entry.style.styleColor);
 			}
 			case KubeUIScreenBuilder.BadgeElement e -> new KubeUIBadge(0, 0, e.text(), e.color(), font);
 			case KubeUIScreenBuilder.RatingElement e -> {
@@ -1103,7 +1247,7 @@ public class KubeUIScreen extends Screen {
 				new KubeUIPanelBackground(0, 0, resolveWidth(entry, owner.elementWidth), resolveHeight(entry, owner.elementWidth), e.texture());
 			case KubeUIScreenBuilder.EntityPreviewElement e -> buildEntityPreview(entry, owner, e);
 			case KubeUIScreenBuilder.KeybindCaptureElement e -> {
-				var widget = new KubeUIKeybindCapture(0, 0, resolveWidth(entry, owner.elementWidth), resolveHeight(entry, FIELD_HEIGHT), e.initial(), font, context, e.onChange());
+				var widget = new KubeUIKeybindCapture(0, 0, resolveWidth(entry, owner.elementWidth), resolveHeight(entry, FIELD_HEIGHT), e.initial(), font, context, e.onChange(), entry.style.styleColor);
 				keybindCaptures.put(e.id(), widget);
 				yield widget;
 			}
@@ -1111,7 +1255,7 @@ public class KubeUIScreen extends Screen {
 			case KubeUIScreenBuilder.BreadcrumbElement e -> buildBreadcrumb(owner, entry, e);
 			case KubeUIScreenBuilder.WizardElement e -> buildWizard(owner, entry, e);
 			case KubeUIScreenBuilder.RangeSliderElement e -> {
-				var widget = new KubeUIRangeSlider(0, 0, resolveWidth(entry, owner.elementWidth), resolveHeight(entry, RANGE_SLIDER_HEIGHT), e.min(), e.max(), e.initialLow(), e.initialHigh(), font, context, e.onChange());
+				var widget = new KubeUIRangeSlider(0, 0, resolveWidth(entry, owner.elementWidth), resolveHeight(entry, RANGE_SLIDER_HEIGHT), e.min(), e.max(), e.initialLow(), e.initialHigh(), font, context, e.onChange(), entry.style.styleColor);
 				rangeSliders.put(e.id(), widget);
 				yield widget;
 			}
@@ -1126,7 +1270,7 @@ public class KubeUIScreen extends Screen {
 			case KubeUIScreenBuilder.SearchBoxElement e -> buildSearchBox(owner, entry, e);
 			case KubeUIScreenBuilder.ResourcePickerElement e -> buildResourcePicker(owner, entry, e);
 			case KubeUIScreenBuilder.TableElement e ->
-				new KubeUITable(0, 0, resolveWidth(entry, owner.elementWidth), e.columnLabels(), e.columnWidths(), e.rows(), font, context, e.onSort());
+				new KubeUITable(0, 0, resolveWidth(entry, owner.elementWidth), e.columnLabels(), e.columnWidths(), e.rows(), font, context, e.onSort(), entry.style.styleColor, entry.style.styleAccent);
 			case KubeUIScreenBuilder.ReorderableListElement e -> buildReorderableList(owner, e);
 			case KubeUIScreenBuilder.ReorderHandleElement e -> new KubeUIListDragHandle(0, 0, e.pos(), e.dragState(), e.listElement(), context);
 			case KubeUIScreenBuilder.ListSelectCheckboxElement e -> {
@@ -1134,7 +1278,7 @@ public class KubeUIScreen extends Screen {
 				yield new KubeUIListSelectCheckbox(0, 0, e.index(), e.state(), context, e.onSelectionChange());
 			}
 			case KubeUIScreenBuilder.ChartElement e ->
-				new KubeUIChart(0, 0, resolveWidth(entry, owner.elementWidth), resolveHeight(entry, CHART_HEIGHT), e.kind(), e.values(), e.labels(), font);
+				new KubeUIChart(0, 0, resolveWidth(entry, owner.elementWidth), resolveHeight(entry, CHART_HEIGHT), e.kind(), e.values(), e.labels(), font, entry.style.styleColor, entry.style.styleAccent);
 			case KubeUIScreenBuilder.MapElement e -> {
 				var widget = new KubeUIMinimap(0, 0, resolveWidth(entry, owner.elementWidth), resolveHeight(entry, owner.elementWidth), e.radius(), font);
 				minimaps.add(widget);
@@ -1716,6 +1860,7 @@ public class KubeUIScreen extends Screen {
 			}
 		});
 		addRenderableWidget(activeContextMenu);
+		setFocused(activeContextMenu);
 	}
 
 	private void dismissContextMenu() {
@@ -2006,6 +2151,32 @@ public class KubeUIScreen extends Screen {
 			case "none" -> extractTransparentBackground(graphics);
 			default -> super.extractBackground(graphics, mouseX, mouseY, a);
 		}
+
+		extractWindowBackground(graphics);
+	}
+
+	/// The real "behind the content" panel `.windowBackground(...)` asks for - drawn here (part of
+	/// [#extractBackground], which vanilla's own `Screen` lifecycle already calls before any child
+	/// widget renders) rather than as a widget in the tree, since that's the only place in this
+	/// screen's render pipeline that's guaranteed to paint before, not after, the actual quest/
+	/// recipe/whatever text sitting on top of it. Sized a few pixels larger than `root` on every
+	/// side so the border reads as a frame around the content rather than clipping straight through
+	/// it, and - for a `.draggable()` screen - extended upward to also back the title bar, so the
+	/// title and its content read as one unified panel instead of a floating label above a
+	/// separately-framed box.
+	private static final int WINDOW_BACKGROUND_PADDING = 6;
+
+	private void extractWindowBackground(GuiGraphicsExtractor graphics) {
+		if (builder.windowBackgroundTexture == null || root == null) {
+			return;
+		}
+
+		int pad = WINDOW_BACKGROUND_PADDING;
+		int x = root.getX() - pad;
+		int y = root.getY() - pad - (builder.draggable ? TITLE_BAR_HEIGHT : 0);
+		int w = root.getWidth() + pad * 2;
+		int h = root.getHeight() + pad * 2 + (builder.draggable ? TITLE_BAR_HEIGHT : 0);
+		KubeUIPanelBackground.draw(graphics, builder.windowBackgroundTexture, x, y, w, h);
 	}
 
 	@Override
@@ -2081,9 +2252,9 @@ public class KubeUIScreen extends Screen {
 		}
 
 		if (builder.draggable && root != null) {
-			graphics.centeredText(font, getTitle().getString(), root.getX() + root.getWidth() / 2, root.getY() - TITLE_BAR_HEIGHT + 4, KubeUITheme.titleColor);
+			graphics.centeredText(font, getTitle().getString(), root.getX() + root.getWidth() / 2, root.getY() - TITLE_BAR_HEIGHT + 4, KubeUITheme.titleColor());
 		} else {
-			graphics.centeredText(font, getTitle().getString(), width / 2, 12, KubeUITheme.titleColor);
+			graphics.centeredText(font, getTitle().getString(), width / 2, 12, KubeUITheme.titleColor());
 		}
 
 		if (KubeUIDebug.outlineEnabled) {

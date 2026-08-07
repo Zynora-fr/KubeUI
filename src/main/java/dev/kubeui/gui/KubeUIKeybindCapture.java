@@ -24,14 +24,16 @@ class KubeUIKeybindCapture extends AbstractWidget implements KubeUINarratable {
 	private int scancode;
 	private boolean listening;
 	private String narration;
+	private final Integer styleColor;
 
-	KubeUIKeybindCapture(int x, int y, int width, int height, int initialKeyCode, Font font, KubeUIContext context, BiConsumer<KubeUIContext, Integer> onChange) {
+	KubeUIKeybindCapture(int x, int y, int width, int height, int initialKeyCode, Font font, KubeUIContext context, BiConsumer<KubeUIContext, Integer> onChange, Integer styleColor) {
 		super(x, y, width, height, Component.literal("Keybind"));
 		this.keyCode = initialKeyCode;
 		this.scancode = -1;
 		this.font = font;
 		this.context = context;
 		this.onChange = onChange;
+		this.styleColor = styleColor;
 	}
 
 	int keyCode() {
@@ -62,6 +64,14 @@ class KubeUIKeybindCapture extends AbstractWidget implements KubeUINarratable {
 	@Override
 	public boolean keyPressed(KeyEvent event) {
 		if (!listening) {
+			// Enter/Space starts listening, same as a click would - without this, a keyboard-only
+			// player could Tab to this field but never actually rebind it (this widget extends
+			// AbstractWidget directly, which - unlike AbstractButton/Checkbox - doesn't implement
+			// any keyPressed of its own to fall back on).
+			if (event.isSelection()) {
+				listening = true;
+				return true;
+			}
 			return false;
 		}
 
@@ -79,8 +89,12 @@ class KubeUIKeybindCapture extends AbstractWidget implements KubeUINarratable {
 		graphics.outline(getX(), getY(), getWidth(), getHeight(), 0xFF6B7679);
 
 		Component label = displayLabel();
-		int textColor = listening ? 0xFF0A1413 : KubeUITheme.textColor;
-		graphics.centeredText(font, label, getX() + getWidth() / 2, getY() + (getHeight() - font.lineHeight) / 2 + 1, textColor);
+		int textColor = listening ? 0xFF0A1413 : (styleColor != null ? styleColor : KubeUITheme.textColor());
+		int lx = getX() + getWidth() / 2;
+		int ly = getY() + (getHeight() - font.lineHeight) / 2 + 1;
+		KubeUIFontScale.draw(graphics, lx, ly, () -> graphics.centeredText(font, label, lx, ly, textColor));
+
+		KubeUIFocusOutline.draw(graphics, this);
 	}
 
 	@Override

@@ -28,9 +28,11 @@ class KubeUITable extends AbstractWidget implements KubeUINarratable {
 	private final Font font;
 	private final KubeUIContext context;
 	private final BiConsumer<KubeUIContext, Integer> onSort;
+	private final Integer styleColor;
+	private final Integer styleAccent;
 	private String narration;
 
-	KubeUITable(int x, int y, int totalWidth, List<String> columnLabels, List<Integer> columnWidths, List<List<String>> rows, Font font, KubeUIContext context, BiConsumer<KubeUIContext, Integer> onSort) {
+	KubeUITable(int x, int y, int totalWidth, List<String> columnLabels, List<Integer> columnWidths, List<List<String>> rows, Font font, KubeUIContext context, BiConsumer<KubeUIContext, Integer> onSort, Integer styleColor, Integer styleAccent) {
 		super(x, y, totalWidth, HEADER_HEIGHT + rows.size() * ROW_HEIGHT, Component.literal("Table"));
 		this.columnLabels = columnLabels;
 		this.columnWidths = columnWidths;
@@ -38,6 +40,8 @@ class KubeUITable extends AbstractWidget implements KubeUINarratable {
 		this.font = font;
 		this.context = context;
 		this.onSort = onSort;
+		this.styleColor = styleColor;
+		this.styleAccent = styleAccent;
 	}
 
 	private int columnX(int column) {
@@ -76,8 +80,14 @@ class KubeUITable extends AbstractWidget implements KubeUINarratable {
 
 	@Override
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+		int accent = styleAccent != null ? styleAccent : KubeUITheme.accentColor();
+		int text = styleColor != null ? styleColor : KubeUITheme.textColor();
+
 		for (int c = 0; c < columnLabels.size(); c++) {
-			graphics.text(font, columnLabels.get(c), columnX(c) + CELL_PADDING, getY() + 4, KubeUITheme.accentColor, false);
+			int cx = columnX(c) + CELL_PADDING;
+			int cy = getY() + 4;
+			String label = columnLabels.get(c);
+			KubeUIFontScale.draw(graphics, cx, cy, () -> graphics.text(font, label, cx, cy, accent, false));
 		}
 
 		int rowsTop = getY() + HEADER_HEIGHT;
@@ -89,9 +99,14 @@ class KubeUITable extends AbstractWidget implements KubeUINarratable {
 
 			List<String> row = rows.get(r);
 			for (int c = 0; c < row.size() && c < columnWidths.size(); c++) {
-				graphics.text(font, row.get(c), columnX(c) + CELL_PADDING, rowY + 3, KubeUITheme.textColor, false);
+				int cx = columnX(c) + CELL_PADDING;
+				int cy = rowY + 3;
+				String cell = row.get(c);
+				KubeUIFontScale.draw(graphics, cx, cy, () -> graphics.text(font, cell, cx, cy, text, false));
 			}
 		}
+
+		KubeUIFocusOutline.draw(graphics, this);
 	}
 
 	@Override

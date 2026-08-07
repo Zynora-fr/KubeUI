@@ -2,6 +2,7 @@ package dev.kubeui.plugin;
 
 import dev.kubeui.gui.KubeUIContext;
 import dev.kubeui.gui.KubeUIEvents;
+import dev.kubeui.gui.KubeUIRemoteScreens;
 import dev.kubeui.gui.KubeUIScreenBuilder;
 import dev.kubeui.gui.KubeUIScreenInjector;
 import dev.kubeui.gui.KubeUISidebar;
@@ -20,6 +21,7 @@ public class KubeUIPlugin implements KubeJSPlugin {
 			filter.allow(KubeUIContext.class);
 			filter.allow(KubeUISidebar.class);
 			filter.allow(KubeUIScreenInjector.class);
+			filter.allow(KubeUIRemoteScreens.class);
 		}
 	}
 
@@ -29,6 +31,7 @@ public class KubeUIPlugin implements KubeJSPlugin {
 			bindings.add("KubeUI", KubeUIScreenBuilder.class);
 			bindings.add("KubeUISidebar", KubeUISidebar.class);
 			bindings.add("KubeUIScreenInjector", KubeUIScreenInjector.class);
+			bindings.add("KubeUIRemoteScreens", KubeUIRemoteScreens.class);
 		}
 	}
 

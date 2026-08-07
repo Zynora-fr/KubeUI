@@ -50,6 +50,10 @@ public class KubeUIMultiWindowHost extends Screen {
 		return windows.isEmpty();
 	}
 
+	List<KubeUIScreen> windows() {
+		return windows;
+	}
+
 	@Override
 	protected void init() {
 		super.init();

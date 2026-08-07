@@ -5,6 +5,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
@@ -26,8 +27,9 @@ class KubeUIRangeSlider extends AbstractWidget implements KubeUINarratable {
 	private double high;
 	private boolean draggingHigh;
 	private String narration;
+	private final Integer styleColor;
 
-	KubeUIRangeSlider(int x, int y, int width, int height, double min, double max, double initialLow, double initialHigh, Font font, KubeUIContext context, KubeUIRangeChangeListener onChange) {
+	KubeUIRangeSlider(int x, int y, int width, int height, double min, double max, double initialLow, double initialHigh, Font font, KubeUIContext context, KubeUIRangeChangeListener onChange, Integer styleColor) {
 		super(x, y, width, height, Component.literal("Range"));
 		this.min = min;
 		this.max = max;
@@ -36,6 +38,7 @@ class KubeUIRangeSlider extends AbstractWidget implements KubeUINarratable {
 		this.font = font;
 		this.context = context;
 		this.onChange = onChange;
+		this.styleColor = styleColor;
 	}
 
 	double low() {
@@ -95,10 +98,42 @@ class KubeUIRangeSlider extends AbstractWidget implements KubeUINarratable {
 		this.narration = text;
 	}
 
+	/// Keyboard equivalent of dragging: Up/Down switches which of the two handles Left/Right
+	/// adjusts (mirrors `draggingHigh`, the same field mouse-dragging already uses) - needed
+	/// because, unlike `.slider()`/`.steppedSlider()` (`AbstractSliderButton`-based, which already
+	/// get arrow-key support for free from vanilla), this widget implements its own hit-testing
+	/// directly on `AbstractWidget`, which doesn't provide any keyboard handling on its own.
+	@Override
+	public boolean keyPressed(KeyEvent event) {
+		if (event.isUp() || event.isDown()) {
+			draggingHigh = !draggingHigh;
+			return true;
+		}
+
+		if (event.isLeft() || event.isRight()) {
+			double step = Math.max((max - min) / 100.0, 1e-6);
+			double delta = (event.isRight() ? 1 : -1) * step;
+			if (draggingHigh) {
+				high = clamp(Math.max(low, high + delta));
+			} else {
+				low = Math.min(high, clamp(low + delta));
+			}
+			if (onChange != null) {
+				onChange.onChange(context, low, high);
+			}
+			return true;
+		}
+
+		return false;
+	}
+
 	@Override
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		String label = formatValue(low) + " - " + formatValue(high);
-		graphics.centeredText(font, label, getX() + getWidth() / 2, getY(), KubeUITheme.textColor);
+		int color = styleColor != null ? styleColor : KubeUITheme.textColor();
+		int lx = getX() + getWidth() / 2;
+		int ly = getY();
+		KubeUIFontScale.draw(graphics, lx, ly, () -> graphics.centeredText(font, label, lx, ly, color));
 
 		int trackTop = getY() + font.lineHeight + 2;
 		int trackBottom = getY() + getHeight();
@@ -111,6 +146,8 @@ class KubeUIRangeSlider extends AbstractWidget implements KubeUINarratable {
 
 		graphics.fill(lowX - HANDLE_WIDTH / 2, trackTop, lowX + HANDLE_WIDTH / 2, trackBottom, 0xFFEAF3F3);
 		graphics.fill(highX - HANDLE_WIDTH / 2, trackTop, highX + HANDLE_WIDTH / 2, trackBottom, 0xFFEAF3F3);
+
+		KubeUIFocusOutline.draw(graphics, this);
 	}
 
 	private String formatValue(double v) {

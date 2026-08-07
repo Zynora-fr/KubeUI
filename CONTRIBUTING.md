@@ -42,6 +42,14 @@ than a prose description.
 - CI (`.github/workflows/ci.yml`) runs a full build + a headless client boot check on every PR -
   it needs to pass before merge.
 
+## Recognition
+
+Every merged PR's author already shows up in GitHub's own contributor graph/insights for this repo
+- no separate contributors list is maintained by hand here, to avoid it silently going stale the
+way a hand-edited list tends to. If that ever stops being enough (e.g. once non-code contributions
+- docs, triage, community help - are common enough to be worth calling out specifically), a real
+section will get added here rather than promised now and never delivered.
+
 ## Code of conduct
 
 Be respectful, assume good faith, and keep discussion focused on the project. Reports of abusive

@@ -9,6 +9,7 @@ import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
 /// One button in the Paladium-style icon bar next to the survival inventory (see
@@ -22,14 +23,16 @@ class KubeUISidebarWidget extends AbstractWidget {
 	private final KubeUISidebarIcon icon;
 	private final ItemStack itemStack;
 	private final Font font;
+	private final Identifier packOverride;
 
-	KubeUISidebarWidget(int x, int y, KubeUISidebarIcon icon, Font font) {
+	KubeUISidebarWidget(int x, int y, KubeUISidebarIcon icon, Font font, Identifier packOverride) {
 		super(x, y, SIZE, SIZE, Component.literal(icon.id()));
 		this.icon = icon;
 		// Built here (screen-open time), not when the script registered the icon (mod-construction
 		// time, before item registries have their components bound - see KubeUISidebarIcon).
 		this.itemStack = icon.itemIcon() != null ? new ItemStack(icon.itemIcon()) : ItemStack.EMPTY;
 		this.font = font;
+		this.packOverride = packOverride;
 
 		if (icon.tooltip() != null && !icon.tooltip().isEmpty()) {
 			setTooltip(Tooltip.create(Component.literal(icon.tooltip())));
@@ -50,7 +53,11 @@ class KubeUISidebarWidget extends AbstractWidget {
 		graphics.fill(getX(), getY() + SIZE - 1, getX() + SIZE, getY() + SIZE, 0xFF373737);
 		graphics.fill(getX() + SIZE - 1, getY(), getX() + SIZE, getY() + SIZE, 0xFF373737);
 
-		if (icon.itemIcon() != null) {
+		if (packOverride != null) {
+			int inset = 2;
+			int size = SIZE - inset * 2;
+			graphics.blit(RenderPipelines.GUI_TEXTURED, packOverride, getX() + inset, getY() + inset, 0, 0, size, size, size, size);
+		} else if (icon.itemIcon() != null) {
 			graphics.item(itemStack, getX() + ITEM_INSET, getY() + ITEM_INSET);
 			graphics.itemDecorations(font, itemStack, getX() + ITEM_INSET, getY() + ITEM_INSET);
 		} else if (icon.textureIcon() != null) {

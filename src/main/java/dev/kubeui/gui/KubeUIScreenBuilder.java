@@ -2,6 +2,8 @@ package dev.kubeui.gui;
 
 import dev.kubeui.KubeUI;
 import net.minecraft.client.Minecraft;
+import net.minecraft.locale.Language;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EntityType;
@@ -11,6 +13,7 @@ import net.minecraft.world.level.block.Block;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -37,7 +40,23 @@ import java.util.function.Supplier;
 public class KubeUIScreenBuilder {
 	/// Keyed by `persistKey` (see [#builder(String, String)]), captured when a screen with that
 	/// key closes and restored as the initial values when a screen with the same key opens again.
-	static final Map<String, Map<String, Object>> PERSISTED = new HashMap<>();
+	/// A `LinkedHashMap` in access-order mode, not a plain `HashMap`: a script that generates many
+	/// distinct *dynamic* `persistKey`s (rather than reusing a fixed small set, the intended usage)
+	/// would otherwise grow this unboundedly for the life of the client - `removeEldestEntry` below
+	/// evicts the least-recently-used key past `KubeUIConfig#maxPersistedPersistKeys` instead.
+	static final Map<String, Map<String, Object>> PERSISTED = new LinkedHashMap<>(16, 0.75f, true) {
+		@Override
+		protected boolean removeEldestEntry(Map.Entry<String, Map<String, Object>> eldest) {
+			return size() > KubeUIConfig.maxPersistedPersistKeys.get();
+		}
+	};
+
+	/// How many `.row()`/`.grid()`/`.scrollPanel()`/`.tab()`/`.accordion()` levels deep this
+	/// builder is nested inside another - incremented by [#childBuilder()], checked there against
+	/// [#MAX_NESTING_DEPTH] so a runaway recursive helper fails with a clear message instead of a
+	/// `StackOverflowError` somewhere deep in layout/render code.
+	private int nestingDepth = 0;
+	private static final int MAX_NESTING_DEPTH = 24;
 
 	final List<Entry> entries = new ArrayList<>();
 	final List<Tab> tabs = new ArrayList<>();
@@ -47,6 +66,7 @@ public class KubeUIScreenBuilder {
 	int elementWidth = 200;
 	int buttonHeight = 20;
 	String persistKey;
+	String screenId;
 
 	float anchorX = 0.5f;
 	float anchorY = 0.5f;
@@ -70,6 +90,7 @@ public class KubeUIScreenBuilder {
 
 	String backgroundMode = "dirt";
 	Identifier backgroundTexture;
+	Identifier windowBackgroundTexture;
 
 	Consumer<KubeUIContext> onOpenCallback;
 	Consumer<KubeUIContext> onCloseCallback;
@@ -92,9 +113,114 @@ public class KubeUIScreenBuilder {
 		return b;
 	}
 
+	/// Builds a settings screen from a plain-data description instead of a hand-chained
+	/// `.builder()` - for a mod that wants a config screen without writing one widget at a time.
+	/// `schema` is a list of field maps, each with `id` (String), `type` (one of `"slider"`,
+	/// `"toggle"`, `"text"`, `"number"`, `"color"`, `"dropdown"`, or `"label"` for a plain heading
+	/// with no control), `label` (String, shown next to the control - defaults to `id`), and
+	/// whichever of `min`/`max`/`initial`/`options` that `type` needs (same meaning/defaults as the
+	/// matching `.slider()`/`.number()`/`.dropdown()`/etc. parameter). `onChange` fires once per
+	/// field change, `fieldId` telling a single shared listener which one - see
+	/// [KubeUIConfigFieldChangeListener]. Field values themselves aren't auto-saved anywhere; a
+	/// script's `onChange` is where to actually write them (to a `KubeUIConfig`-style
+	/// `ModConfigSpec`, `KubeUIActions.playerData(...)`, or anything else).
+	public static KubeUIScreenBuilder configScreen(String title, List<Map<String, Object>> schema) {
+		return configScreen(title, schema, (screen, fieldId, newValue) -> {
+		});
+	}
+
+	/// Same as [#configScreen(String, List)], with a listener notified on every field change.
+	public static KubeUIScreenBuilder configScreen(String title, List<Map<String, Object>> schema, KubeUIConfigFieldChangeListener onChange) {
+		var safeOnChange = onChange == null ? (KubeUIConfigFieldChangeListener) (s, f, v) -> {
+		} : onChange;
+		var b = builder(title);
+
+		if (schema == null) {
+			return b;
+		}
+
+		for (var field : schema) {
+			addConfigField(b, field, safeOnChange);
+		}
+
+		return b;
+	}
+
+	private static void addConfigField(KubeUIScreenBuilder b, Map<String, Object> field, KubeUIConfigFieldChangeListener onChange) {
+		String id = stringOf(field.get("id"), null);
+		String type = stringOf(field.get("type"), null);
+		String label = stringOf(field.get("label"), id);
+
+		if (id == null || type == null) {
+			KubeUI.LOGGER.error("KubeUI.configScreen(...) - a field needs at least 'id' and 'type', ignoring one entry (id={}, type={})", id, type);
+			return;
+		}
+
+		switch (type) {
+			case "label" -> b.label(id, label);
+			case "slider" -> {
+				double min = numberOf(field.get("min"), 0);
+				double max = numberOf(field.get("max"), 1);
+				double initial = numberOf(field.get("initial"), min);
+				b.label(id + "__label", label);
+				b.slider(id, min, max, initial, (screen, value) -> onChange.onChange(screen, id, value));
+			}
+			case "toggle" -> {
+				boolean initial = field.get("initial") instanceof Boolean bool && bool;
+				b.toggle(id, label, initial, (screen, value) -> onChange.onChange(screen, id, value));
+			}
+			case "text" -> {
+				String initial = stringOf(field.get("initial"), "");
+				b.label(id + "__label", label);
+				b.textField(id, initial, null, (screen, value) -> onChange.onChange(screen, id, value));
+			}
+			case "number" -> {
+				int min = (int) numberOf(field.get("min"), 0);
+				int max = (int) numberOf(field.get("max"), 100);
+				int initial = (int) numberOf(field.get("initial"), min);
+				b.label(id + "__label", label);
+				b.number(id, min, max, initial, (screen, value) -> onChange.onChange(screen, id, value));
+			}
+			case "color" -> {
+				long initial = (long) numberOf(field.get("initial"), 0xFFFFFFFFL);
+				b.label(id + "__label", label);
+				b.colorPicker(id, initial, (screen, value) -> onChange.onChange(screen, id, value));
+			}
+			case "dropdown" -> {
+				@SuppressWarnings("unchecked")
+				var options = field.get("options") instanceof List<?> list ? (List<String>) list : List.<String>of();
+				String initial = stringOf(field.get("initial"), options.isEmpty() ? "" : options.get(0));
+				b.label(id + "__label", label);
+				b.dropdown(id, options, initial, (screen, value) -> onChange.onChange(screen, id, value));
+			}
+			default -> KubeUI.LOGGER.error("KubeUI.configScreen(...) - unknown field type '{}' for '{}', ignoring that field", type, id);
+		}
+	}
+
+	private static String stringOf(Object value, String fallback) {
+		return value instanceof String s ? s : fallback;
+	}
+
+	private static double numberOf(Object value, double fallback) {
+		return value instanceof Number n ? n.doubleValue() : fallback;
+	}
+
+	/// Resolves `langKey` from the active language file, falling back to `fallbackText` if that key
+	/// doesn't exist (e.g. no translation was ever added for it) - shared by [#labelKey] and every
+	/// other `Key`-suffixed overload below. Resolved once, at build time - a mid-game language
+	/// change needs the screen rebuilt (`screen.update(b -> {})`, or just reopened) to pick it up.
+	private static String resolveKey(String langKey, String fallbackText) {
+		return Language.getInstance().getOrDefault(langKey, fallbackText);
+	}
+
 	/// Adds a clickable button. `onClick` receives the [KubeUIContext] for the open screen.
 	public KubeUIScreenBuilder button(String text, Consumer<KubeUIContext> onClick) {
 		return add(new ButtonElement(text, safe(onClick)));
+	}
+
+	/// Same as [#button(String, Consumer)], with the button's text resolved via [#resolveKey].
+	public KubeUIScreenBuilder buttonKey(String langKey, String fallbackText, Consumer<KubeUIContext> onClick) {
+		return button(resolveKey(langKey, fallbackText), onClick);
 	}
 
 	/// Adds a plain text line. Its text can be changed later via [KubeUIContext#setLabel].
@@ -107,7 +233,7 @@ public class KubeUIScreenBuilder {
 	/// Resolved once, when the screen is built - a mid-game language change needs the screen
 	/// rebuilt (`screen.update(b -> {})`, or just reopened) to pick up the new text.
 	public KubeUIScreenBuilder labelKey(String id, String langKey, String fallbackText) {
-		return add(new LabelElement(id, net.minecraft.locale.Language.getInstance().getOrDefault(langKey, fallbackText)));
+		return add(new LabelElement(id, resolveKey(langKey, fallbackText)));
 	}
 
 	/// Adds a checkbox. `onChange` fires every time it's toggled, with the new value.
@@ -115,10 +241,22 @@ public class KubeUIScreenBuilder {
 		return add(new ToggleElement(id, text, initial, safeBi(onChange)));
 	}
 
+	/// Same as [#toggle(String, String, boolean, BiConsumer)], with its label resolved via
+	/// [#resolveKey].
+	public KubeUIScreenBuilder toggleKey(String id, String langKey, String fallbackText, boolean initial, BiConsumer<KubeUIContext, Boolean> onChange) {
+		return toggle(id, resolveKey(langKey, fallbackText), initial, onChange);
+	}
+
 	/// Adds a single-line text field. `hint` (may be null/empty) shows as greyed-out placeholder
 	/// text. `onChange` fires on every keystroke with the field's current value.
 	public KubeUIScreenBuilder textField(String id, String initialValue, String hint, BiConsumer<KubeUIContext, String> onChange) {
 		return add(new TextFieldElement(id, initialValue, hint, safeBi(onChange)));
+	}
+
+	/// Same as [#textField(String, String, String, BiConsumer)], with its hint resolved via
+	/// [#resolveKey] - `initialValue` is real field content, not a hint, so it's untranslated.
+	public KubeUIScreenBuilder textFieldKey(String id, String initialValue, String hintLangKey, String hintFallback, BiConsumer<KubeUIContext, String> onChange) {
+		return textField(id, initialValue, resolveKey(hintLangKey, hintFallback), onChange);
 	}
 
 	/// Adds a slider whose value is remapped from [min, max]. `onChange` fires while dragging.
@@ -147,6 +285,12 @@ public class KubeUIScreenBuilder {
 		return add(new TextAreaElement(id, initialValue, hint, height, safeBi(onChange)));
 	}
 
+	/// Same as [#textArea(String, String, String, int, BiConsumer)], with its hint resolved via
+	/// [#resolveKey] - `initialValue` is real field content, not a hint, so it's untranslated.
+	public KubeUIScreenBuilder textAreaKey(String id, String initialValue, String hintLangKey, String hintFallback, int height, BiConsumer<KubeUIContext, String> onChange) {
+		return textArea(id, initialValue, resolveKey(hintLangKey, hintFallback), height, onChange);
+	}
+
 	/// Adds a static image, scaled to fill `width` x `height`. Not updatable afterwards.
 	public KubeUIScreenBuilder image(Identifier texture, int width, int height) {
 		return add(new ImageElement(texture, width, height));
@@ -161,6 +305,20 @@ public class KubeUIScreenBuilder {
 	/// [KubeUIContext] for the open screen.
 	public KubeUIScreenBuilder item(Item item, int count, Consumer<KubeUIContext> onClick) {
 		return add(new ItemElement(new ItemStack(item, count), safe(onClick)));
+	}
+
+	/// Same as [#recipeSlot(String, List, Consumer)], not clickable.
+	public KubeUIScreenBuilder recipeSlot(String id, List<String> itemIds) {
+		return recipeSlot(id, itemIds, null);
+	}
+
+	/// A JEI-style ingredient slot: cycles through every item in `itemIds` (real item id strings,
+	/// e.g. `"minecraft:oak_log"`) once a second, rather than showing one arbitrary representative
+	/// item from a group that accepts several - useful for showing a recipe's real ingredient
+	/// group (e.g. "any log"), not just one example. Unresolvable ids are skipped, not shown as
+	/// broken - a whole-empty `itemIds` renders as an empty slot rather than failing.
+	public KubeUIScreenBuilder recipeSlot(String id, List<String> itemIds, Consumer<KubeUIContext> onClick) {
+		return add(new RecipeSlotElement(id, itemIds, safe(onClick)));
 	}
 
 	/// Adds a widget registered by a third-party **Java** mod via [KubeUIWidgets#register].
@@ -220,6 +378,11 @@ public class KubeUIScreenBuilder {
 	/// ARGB value (`long` for the same overflow reason as [#colorPicker]). Purely decorative.
 	public KubeUIScreenBuilder badge(String text, long color) {
 		return add(new BadgeElement(text, (int) color));
+	}
+
+	/// Same as [#badge(String, long)], with its text resolved via [#resolveKey].
+	public KubeUIScreenBuilder badgeKey(String langKey, String fallbackText, long color) {
+		return badge(resolveKey(langKey, fallbackText), color);
 	}
 
 	/// Adds a row of stars (1..max). Clickable unless `onChange` is null (read-only display).
@@ -285,6 +448,31 @@ public class KubeUIScreenBuilder {
 		var nested = childBuilder();
 		children.accept(nested);
 		return add(new ScrollPanelElement(maxHeight, nested));
+	}
+
+	/// Runs `then` against this same builder only if `condition` is true - an alternative to
+	/// breaking a fluent chain with a bare `if` between two `.xyz(...)` calls.
+	/// ```js
+	/// KubeUI.builder('Shop')
+	///     .label('gold', 'Gold: ' + gold)
+	///     .when(gold < 10, b => b.label('warn', 'Low on gold!'))
+	///     .button('Buy', screen => {})
+	/// ```
+	public KubeUIScreenBuilder when(boolean condition, Consumer<KubeUIScreenBuilder> then) {
+		if (condition) {
+			then.accept(this);
+		}
+		return this;
+	}
+
+	/// Calls `body.accept(this, i)` for `i` from `0` to `count - 1` - a lighter alternative to
+	/// [#list(String, List, KubeUIListItemRenderer)] when there's no real backing array to iterate,
+	/// just a repeated shape (e.g. `count` empty inventory slot placeholders).
+	public KubeUIScreenBuilder repeat(int count, BiConsumer<KubeUIScreenBuilder, Integer> body) {
+		for (int i = 0; i < count; i++) {
+			body.accept(this, i);
+		}
+		return this;
 	}
 
 	/// Adds two side-by-side scrollable panes, `width` x `height` pixels total, separated by a
@@ -677,6 +865,21 @@ public class KubeUIScreenBuilder {
 		return this;
 	}
 
+	/// A real nine-slice panel drawn behind this screen's own content area (not the whole game
+	/// window - see [#background(Identifier)] for that) - the actual "give this screen a designed
+	/// look" hook, unlike [KubeUIScreenBuilder#panelBackground], which is a normal-flow element
+	/// that occupies its own row/column space rather than sitting behind everything else (this
+	/// widget system has no way for normal-flow content to overlap by design, and an
+	/// `.absolute(...)`-positioned element always paints *after*, i.e. on top of, normal content -
+	/// see [KubeUIScreen]'s own render order - so a true "behind the content" panel has to be
+	/// something the screen itself draws first, not a widget in the tree). Same fixed
+	/// 32x32-texture/8px-border nine-slice convention as `.panelBackground(...)`. Root builder
+	/// only.
+	public KubeUIScreenBuilder windowBackground(Identifier texture) {
+		this.windowBackgroundTexture = texture;
+		return this;
+	}
+
 	/// Makes the screen's content draggable by its title. Root builder only.
 	public KubeUIScreenBuilder draggable() {
 		this.draggable = true;
@@ -783,6 +986,18 @@ public class KubeUIScreenBuilder {
 		return this;
 	}
 
+	/// Opts this screen into server-side open-screen tracking (`KubeUIActions.getOpenScreenId(player)`):
+	/// while open, the server is notified this player has `id` open, and notified again when it
+	/// closes. Purely opt-in - a screen with no `.screenId(...)` sends nothing and isn't tracked at
+	/// all. Also the id `KubeUIActions.openRemote(player, id, data)`/`.broadcastUpdate(id, data)`
+	/// target reaches on this client via `KubeUIRemoteScreens.register(id, ...)` - the two features
+	/// share one id namespace since they're the same underlying concept (server addressing a
+	/// specific screen by name) from two directions. Root builder only.
+	public KubeUIScreenBuilder screenId(String id) {
+		this.screenId = id;
+		return this;
+	}
+
 	/// Called once, right after the screen finishes opening.
 	public KubeUIScreenBuilder onOpen(Consumer<KubeUIContext> callback) {
 		this.onOpenCallback = safe(callback);
@@ -833,12 +1048,13 @@ public class KubeUIScreenBuilder {
 	/// looking tiny depending on the player's screen. Ignored (falls back to the pixel default) if
 	/// `spec` isn't a valid `"<number>%"` string.
 	public KubeUIScreenBuilder width(String spec) {
+		var entry = lastEntry();
 		Float pct = KubeUILayoutMath.parsePercent(spec);
 		if (pct != null) {
-			lastStyle().widthPercent = pct;
-			lastStyle().width = null;
+			entry.style.widthPercent = pct;
+			entry.style.width = null;
 		} else {
-			KubeUI.LOGGER.error("Invalid width '{}' - expected a pixel count or a percentage like \"50%\"", spec);
+			KubeUI.LOGGER.error("Invalid width '{}' for {} - expected a pixel count or a percentage like \"50%\"", spec, describeElement(entry.element));
 		}
 		return this;
 	}
@@ -846,12 +1062,13 @@ public class KubeUIScreenBuilder {
 	/// Same as [#height(int)], but as a percentage of the whole screen's current height - see
 	/// [#width(String)].
 	public KubeUIScreenBuilder height(String spec) {
+		var entry = lastEntry();
 		Float pct = KubeUILayoutMath.parsePercent(spec);
 		if (pct != null) {
-			lastStyle().heightPercent = pct;
-			lastStyle().height = null;
+			entry.style.heightPercent = pct;
+			entry.style.height = null;
 		} else {
-			KubeUI.LOGGER.error("Invalid height '{}' - expected a pixel count or a percentage like \"50%\"", spec);
+			KubeUI.LOGGER.error("Invalid height '{}' for {} - expected a pixel count or a percentage like \"50%\"", spec, describeElement(entry.element));
 		}
 		return this;
 	}
@@ -897,6 +1114,29 @@ public class KubeUIScreenBuilder {
 		return this;
 	}
 
+	/// Overrides the color(s) the last-added element draws with, beyond the screen-wide theme (see
+	/// [#setTheme(long, long, long)]) - for a single element that needs to stand out (a warning
+	/// badge's text, an important chart) without changing every other element on the screen.
+	/// `overrides` may have a `"color"`/`"accent"` key (opaque ARGB, same convention as
+	/// [#setTheme(long, long, long)] - a JS number literal like `0xFFff5555` is bigger than
+	/// `Integer.MAX_VALUE`, Rhino hands it to Java as a `Double`/`Long`, never silently truncated
+	/// here either). Only has an effect on elements that already read the theme colors directly:
+	/// `.richText()`/`.table()`/`.chart()`/`.rangeSlider()`/`.keybindCapture()` (`"color"`) and
+	/// `.progressBar()`/`.table()`/`.chart()` (`"accent"`) - a no-op on anything else (vanilla-drawn
+	/// widgets like `.button()`/`.toggle()` aren't recolorable from outside at all, same limitation
+	/// [KubeUITheme] itself already has).
+	public KubeUIScreenBuilder style(Map<String, Object> overrides) {
+		Object color = overrides.get("color");
+		if (color instanceof Number n) {
+			lastStyle().styleColor = (int) n.longValue();
+		}
+		Object accent = overrides.get("accent");
+		if (accent instanceof Number n) {
+			lastStyle().styleAccent = (int) n.longValue();
+		}
+		return this;
+	}
+
 	/// Sets the horizontal alignment (`"left"`, `"center"` or `"right"`) of the last-added element
 	/// within the space allotted to it (relevant when it's narrower than its column/cell).
 	public KubeUIScreenBuilder align(String horizontal) {
@@ -934,6 +1174,27 @@ public class KubeUIScreenBuilder {
 		return this;
 	}
 
+	/// Same as [#tooltip(String)], with its text resolved via [#resolveKey].
+	public KubeUIScreenBuilder tooltipKey(String langKey, String fallbackText) {
+		return tooltip(resolveKey(langKey, fallbackText));
+	}
+
+	/// Greys out (disables) the last-added element until the server confirms `gate` for this
+	/// player, via NeoForge's real [net.neoforged.neoforge.server.permission.PermissionAPI] - a
+	/// neutral hook a permission plugin (LuckPerms or equivalent) can plug into without KubeUI
+	/// depending on it directly. Starts disabled (deny-by-default while the check is in flight,
+	/// which happens once per screen open, batched over every distinct gate it uses - not once per
+	/// widget). **Decorative only**: a modified client could skip this entirely and call
+	/// `screen.runServerAction(...)` directly regardless - anything that actually matters (a price,
+	/// a permission) still has to be re-checked server-side in the action handler itself, the same
+	/// "never trust the client" rule every other server-authoritative KubeUI feature already
+	/// follows. `gate` is a plain string (e.g. `"shop.buy"`), not a full permission node - see
+	/// [dev.kubeui.gui.KubeUIPermissions] for how it's actually resolved.
+	public KubeUIScreenBuilder requirePermission(String gate) {
+		lastStyle().requiredPermission = gate;
+		return this;
+	}
+
 	/// Same as [#tooltip(String)], but multiple styled lines (build each with vanilla
 	/// `Component`/`Style`, same as [#richText]) instead of one flat string. Takes priority over
 	/// `.tooltip(...)` if both are set on the same element.
@@ -956,6 +1217,11 @@ public class KubeUIScreenBuilder {
 	public KubeUIScreenBuilder narration(String text) {
 		lastStyle().narration = text;
 		return this;
+	}
+
+	/// Same as [#narration(String)], with its text resolved via [#resolveKey].
+	public KubeUIScreenBuilder narrationKey(String langKey, String fallbackText) {
+		return narration(resolveKey(langKey, fallbackText));
 	}
 
 	/// Plays `soundId` (in addition to the default click sound) when the last-added element is
@@ -1025,16 +1291,254 @@ public class KubeUIScreenBuilder {
 		Minecraft.getInstance().setScreen(null);
 	}
 
+	/// Opens a screen listing every recipe of `recipeTypeId` (e.g. `"minecraft:smelting"`, or a
+	/// script-defined type registered via `ServerEvents.recipeSchemaRegistry`) - input/output shown
+	/// with [#recipeSlot(String, List, Consumer)]. Real recipes only exist queryably server-side, so
+	/// this asks the server and opens the screen once it replies - not instant, and there's nothing
+	/// to build/return synchronously.
+	public static void recipeScreen(String recipeTypeId) {
+		KubeUIRecipeBridge.requestRecipeScreen(recipeTypeId);
+	}
+
+	/// Asks the server for every recipe with an ingredient slot that accepts `itemId`, across every
+	/// recipe type at once - `onResult(screen, recipes)` fires once it replies. Each entry is a raw
+	/// `CompoundTag` with `id` (string), `inputs` (a list of ingredient groups, each a list of item
+	/// id strings - `.getListOrEmpty("inputs")`), and `output` (a single item id string, absent if
+	/// a recipe has no simple item result) - the same `.getStringOr(...)`/`.getListOrEmpty(...)`
+	/// accessors every other `data` parameter in this API already uses. `screen` is always null
+	/// (there's no open-screen context for this call) - `onResult` is really just a plain callback,
+	/// typed to match every other `(screen, value)` callback in this API. Only the most recent
+	/// call's callback is kept if called again before a reply arrives - see [KubeUIRecipeBridge].
+	public static void recipesFor(String itemId, BiConsumer<KubeUIContext, List<CompoundTag>> onResult) {
+		KubeUIRecipeBridge.requestRecipesFor(itemId, onResult);
+	}
+
+	/// Opens a read-only log of every quest defined via `KubeUIActions.defineQuest(...)` (or
+	/// `/kubeui quest-editor`) and this player's progress on each, grouped by status - same
+	/// "ask the server, open once it replies" shape as [#recipeScreen] (quest progress is real
+	/// server state, never client-trusted). There are no Accept/Turn-in buttons here on purpose -
+	/// see [KubeUIQuestGiverScreen], opened instead by right-clicking an entity tagged via
+	/// `KubeUIActions.tagQuestGiver(...)`.
+	public static void questLog() {
+		KubeUIQuestLogScreen.open();
+	}
+
+	/// A human-readable, indented listing of every element's type and id in `builder` (recursing
+	/// into `.row()`/`.grid()`/`.scrollPanel()`/`.accordion()`/`.tab()` content) - for debugging or
+	/// generating docs from an already-written screen instead of writing them by hand. Covers the
+	/// same representative container/leaf types as [#toJson] - see its note for why, and
+	/// [#lastEntry]/[#describeElement] for the per-element formatting this reuses.
+	public static String describe(KubeUIScreenBuilder builder) {
+		var sb = new StringBuilder();
+		sb.append("Screen('").append(builder.title.getString()).append("')\n");
+		describeEntries(builder.entries, sb, 1);
+		for (var tab : builder.tabs) {
+			sb.append("  Tab('").append(tab.name()).append("')\n");
+			describeEntries(tab.content().entries, sb, 2);
+		}
+		return sb.toString();
+	}
+
+	private static void describeEntries(List<Entry> entries, StringBuilder sb, int depth) {
+		String pad = "  ".repeat(depth);
+		for (var entry : entries) {
+			sb.append(pad).append(describeElement(entry.element)).append('\n');
+			describeEntries(containerChildren(entry.element), sb, depth + 1);
+		}
+	}
+
+	/// The nested builder's entries for whichever container element types [#describe]/[#toJson]/
+	/// [#lint] know how to recurse into - empty (not an error) for every other element, container
+	/// or not, exactly like [#toJson]'s scope.
+	private static List<Entry> containerChildren(Element element) {
+		return switch (element) {
+			case RowElement e -> e.content().entries;
+			case GridElement e -> e.content().entries;
+			case ScrollPanelElement e -> e.content().entries;
+			case AccordionElement e -> e.content.entries;
+			default -> List.of();
+		};
+	}
+
+	/// Flags issues in `builder` that are detectable by inspecting the already-built entry tree -
+	/// today just duplicate element ids (the same check [#add] already logs live, surfaced here as
+	/// a plain list a script can act on itself, e.g. print in chat or fail a test) - callable
+	/// before `.open()` is ever reached. Real static analysis of the *script* that produced
+	/// `builder` (unreachable callbacks, truly orphaned widgets) isn't attempted - this project has
+	/// no JS/AST parser, the same constraint documented for the scrapped visual-editor import
+	/// feature, and inspecting whether a callback is null isn't a reliable signal
+	/// either (several widgets - `.item(...)`, decorative rows - intentionally allow a null one).
+	public static List<String> lint(KubeUIScreenBuilder builder) {
+		var issues = new ArrayList<String>();
+		lintEntries(builder.entries, issues, new java.util.HashSet<>());
+		for (var tab : builder.tabs) {
+			lintEntries(tab.content().entries, issues, new java.util.HashSet<>());
+		}
+		return issues;
+	}
+
+	private static void lintEntries(List<Entry> entries, List<String> issues, java.util.Set<String> seenIds) {
+		for (var entry : entries) {
+			String id = entry.effectiveId();
+			if (id != null && !seenIds.add(id)) {
+				issues.add("Duplicate id '" + id + "' (" + describeElement(entry.element) + ")");
+			}
+			lintEntries(containerChildren(entry.element), issues, seenIds);
+		}
+	}
+
+	/// JSON export/import of a screen's *layout* - a representative subset of widget
+	/// types (label, button, toggle, textField, slider, number, divider, spacer, row, grid), the
+	/// same honest scope-reduction this project already applies elsewhere (e.g. the scrapped visual
+	/// editor's palette) rather than covering the full ~60-widget catalog. Callbacks can't survive
+	/// a round trip through JSON (they're JS closures, not data) - [#fromJson] rebuilds every
+	/// interactive element with a no-op callback; a script using it is expected to fill those back
+	/// in, the same way the scrapped visual editor's code export produced empty `(screen, value) =>
+	/// {}` stubs to complete by hand rather than claiming to reconstruct real behavior.
+	public static String toJson(KubeUIScreenBuilder builder) {
+		return new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(entriesToJson(builder.entries));
+	}
+
+	private static List<Object> entriesToJson(List<Entry> entries) {
+		var list = new ArrayList<>();
+		for (var entry : entries) {
+			var node = elementToJson(entry.element);
+			if (node != null) {
+				list.add(node);
+			}
+		}
+		return list;
+	}
+
+	private static Map<String, Object> elementToJson(Element element) {
+		return switch (element) {
+			case LabelElement e -> jsonMap("type", "label", "id", e.id(), "text", e.text());
+			case ButtonElement e -> jsonMap("type", "button", "text", e.text());
+			case ToggleElement e -> jsonMap("type", "toggle", "id", e.id(), "text", e.text(), "initial", e.initial());
+			case TextFieldElement e -> jsonMap("type", "textField", "id", e.id(), "initialValue", e.initialValue(), "hint", e.hint());
+			case SliderElement e -> jsonMap("type", "slider", "id", e.id(), "min", e.min(), "max", e.max(), "initial", e.initial());
+			case NumberElement e -> jsonMap("type", "number", "id", e.id(), "min", e.min(), "max", e.max(), "initial", e.initial());
+			case DividerElement ignored -> jsonMap("type", "divider");
+			case SpacerElement e -> jsonMap("type", "spacer", "height", e.height());
+			case RowElement e -> jsonMap("type", "row", "children", entriesToJson(e.content().entries));
+			case GridElement e -> jsonMap("type", "grid", "columns", e.columns(), "children", entriesToJson(e.content().entries));
+			default -> null;
+		};
+	}
+
+	private static Map<String, Object> jsonMap(Object... keyValues) {
+		var map = new java.util.LinkedHashMap<String, Object>();
+		for (int i = 0; i < keyValues.length; i += 2) {
+			map.put((String) keyValues[i], keyValues[i + 1]);
+		}
+		return map;
+	}
+
+	/// Reverse of [#toJson] - see its note on scope (same representative widget subset) and on
+	/// every interactive element coming back with a no-op callback.
+	@SuppressWarnings("unchecked")
+	public static KubeUIScreenBuilder fromJson(String json) {
+		var type = new com.google.gson.reflect.TypeToken<List<Map<String, Object>>>() {
+		}.getType();
+		List<Map<String, Object>> nodes = new com.google.gson.Gson().fromJson(json, type);
+		var b = builder("KubeUI.fromJson");
+		appendJsonNodes(b, nodes);
+		return b;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static void appendJsonNodes(KubeUIScreenBuilder b, List<Map<String, Object>> nodes) {
+		if (nodes == null) {
+			return;
+		}
+		for (var node : nodes) {
+			String type = String.valueOf(node.get("type"));
+			switch (type) {
+				case "label" -> b.label(jsonStr(node, "id"), jsonStr(node, "text"));
+				case "button" -> b.button(jsonStr(node, "text"), ctx -> {
+				});
+				case "toggle" -> b.toggle(jsonStr(node, "id"), jsonStr(node, "text"), jsonBool(node, "initial"), (ctx, v) -> {
+				});
+				case "textField" -> b.textField(jsonStr(node, "id"), jsonStr(node, "initialValue"), jsonStr(node, "hint"), (ctx, v) -> {
+				});
+				case "slider" -> b.slider(jsonStr(node, "id"), jsonNum(node, "min"), jsonNum(node, "max"), jsonNum(node, "initial"), (ctx, v) -> {
+				});
+				case "number" -> b.number(jsonStr(node, "id"), (int) jsonNum(node, "min"), (int) jsonNum(node, "max"), (int) jsonNum(node, "initial"), (ctx, v) -> {
+				});
+				case "divider" -> b.divider();
+				case "spacer" -> b.spacer((int) jsonNum(node, "height"));
+				case "row" -> b.row(rb -> appendJsonNodes(rb, (List<Map<String, Object>>) node.get("children")));
+				case "grid" -> b.grid((int) jsonNum(node, "columns"), gb -> appendJsonNodes(gb, (List<Map<String, Object>>) node.get("children")));
+				default -> KubeUI.LOGGER.warn("KubeUI.fromJson: unsupported element type '{}' - skipping it instead of failing the whole import.", type);
+			}
+		}
+	}
+
+	private static String jsonStr(Map<String, Object> node, String key) {
+		Object v = node.get(key);
+		return v != null ? v.toString() : "";
+	}
+
+	private static double jsonNum(Map<String, Object> node, String key) {
+		return node.get(key) instanceof Number n ? n.doubleValue() : 0;
+	}
+
+	private static boolean jsonBool(Map<String, Object> node, String key) {
+		return Boolean.TRUE.equals(node.get(key));
+	}
+
 	/// Sets the global color theme applied to every screen built from now on. Colors are opaque
 	/// ARGB values (`0xFFrrggbb`) - `long` for the same reason as [#colorPicker]. Only affects
-	/// what KubeUI draws directly (title, progress bar fill, divider) - see [KubeUITheme].
+	/// what KubeUI draws directly (title, progress bar fill, divider) - see [KubeUITheme]. A change
+	/// made while a screen is already open fades to the new colors over 300ms rather than snapping.
+	/// Session-only (never written to `config/kubeui-common.toml`) regardless of
+	/// `persistScaleAndTheme` - raw colors have no stable name to persist as a default the way
+	/// [#setTheme(String)] does; use [#registerThemePreset] first if this combination should
+	/// survive a restart.
 	public static void setTheme(long titleColor, long accentColor, long textColor) {
 		KubeUITheme.set((int) titleColor, (int) accentColor, (int) textColor);
 	}
 
-	/// Restores the default theme.
+	/// Same as [#setTheme(long, long, long)], but applies a named preset instead of raw colors -
+	/// one of the built-ins (`"default"`, `"dark"`, `"light"`, `"high-contrast"`) or one registered
+	/// with [#registerThemePreset]. Logs an error and leaves the current theme unchanged if `name`
+	/// isn't recognized. Persisted to `config/kubeui-common.toml` as the new startup default unless
+	/// `KubeUIConfig.persistScaleAndTheme` is set to `false` in that file - see
+	/// [#setTheme(String, boolean)] to override that per call instead.
+	public static void setTheme(String name) {
+		setTheme(name, KubeUIConfig.persistScaleAndTheme.get());
+	}
+
+	/// Same as [#setTheme(String)], but `persist` overrides `KubeUIConfig.persistScaleAndTheme`
+	/// for this one call - `true` always writes `config/kubeui-common.toml`, `false` never does,
+	/// regardless of what the file currently says.
+	public static void setTheme(String name, boolean persist) {
+		boolean recognized = KubeUITheme.applyPreset(name);
+		if (persist && recognized) {
+			KubeUIConfig.defaultTheme.set(name);
+			KubeUIConfig.defaultTheme.save();
+		}
+	}
+
+	/// Registers `name` as a reusable theme preset - any script (this one or another addon) can
+	/// then apply it later with `KubeUI.setTheme(name)`, without needing to know or repeat the raw
+	/// colors. Registering the same `name` again replaces it. Colors are opaque ARGB `long`s, same
+	/// convention as [#setTheme(long, long, long)].
+	public static void registerThemePreset(String name, long titleColor, long accentColor, long textColor) {
+		KubeUITheme.registerPreset(name, (int) titleColor, (int) accentColor, (int) textColor);
+	}
+
+	/// Restores the default theme - same persistence behavior as [#setTheme(String)] (writes
+	/// `"default"` as the new startup default unless `KubeUIConfig.persistScaleAndTheme` is off).
 	public static void resetTheme() {
-		KubeUITheme.reset();
+		setTheme("default");
+	}
+
+	/// Applies a named preset (see [#setTheme(String)]) for `durationMs`, then automatically fades
+	/// back to whatever the theme was before - for trying a theme out without committing to it.
+	/// Backs `/kubeui theme preview <name>`. Returns whether `name` was recognized.
+	public static boolean previewTheme(String name, int durationMs) {
+		return KubeUITheme.previewPreset(name, durationMs);
 	}
 
 	/// Multiplies the pixel-based width/height of every widget on every screen built from now on
@@ -1042,19 +1546,68 @@ public class KubeUIScreenBuilder {
 	/// own GUI Scale option, for when a script's UI doesn't fit comfortably on a given player's
 	/// screen. Doesn't affect `.width("50%")`-style percentages, which are already relative to the
 	/// screen. Players can also reach this themselves via `/kubeui scale <factor>` without needing
-	/// script support.
+	/// script support. Persisted to `config/kubeui-common.toml` as the new startup default unless
+	/// `KubeUIConfig.persistScaleAndTheme` is `false` - see [#setScale(double, boolean)] to override
+	/// that per call.
 	public static void setScale(double scale) {
-		KubeUITheme.setScale((float) scale);
+		setScale(scale, KubeUIConfig.persistScaleAndTheme.get());
 	}
 
-	/// Restores the default (1.0) scale.
+	/// Same as [#setScale(double)], but `persist` overrides `KubeUIConfig.persistScaleAndTheme` for
+	/// this one call.
+	public static void setScale(double scale, boolean persist) {
+		KubeUITheme.setScale((float) scale);
+		if (persist) {
+			KubeUIConfig.defaultScale.set((double) KubeUITheme.uiScale);
+			KubeUIConfig.defaultScale.save();
+		}
+	}
+
+	/// Restores the default (1.0) scale - same persistence behavior as [#setScale(double)].
 	public static void resetScale() {
-		KubeUITheme.resetScale();
+		setScale(KubeUITheme.DEFAULT_UI_SCALE);
 	}
 
 	/// The current global scale (see [#setScale(double)]) - also used by `/kubeui scale`.
 	public static float getScale() {
 		return KubeUITheme.uiScale;
+	}
+
+	/// Multiplies the size of *text only* on every screen built from now on (clamped to 0.5-2.0),
+	/// independent of [#setScale(double)] - which multiplies box/widget sizes and lets text overflow
+	/// its now-bigger box, not the text itself. Unlike [KubeUIScreenBuilder#renderScale(double)]
+	/// (a real transform on one specific screen, boxes included), this is global and text-only -
+	/// for enlarging text on a layout that already fits, an accessibility-oriented knob. Only
+	/// affects the handful of elements KubeUI draws its own text for, via a real transform around
+	/// each draw call: `.richText()`, `.table()`, `.chart()`'s value labels, `.rangeSlider()`'s
+	/// value label, `.keybindCapture()`'s key name, `.progressBar()`'s percentage. Everything else
+	/// (`.label()` included) is drawn by a vanilla widget class from the inside, the same scoping
+	/// limitation [#narration(String)] already has - keeps its native size. Players can also reach
+	/// this via `/kubeui fontscale <factor>`. Persisted to `config/kubeui-common.toml` as the new
+	/// startup default unless `KubeUIConfig.persistScaleAndTheme` is `false` - see
+	/// [#setFontScale(double, boolean)] to override that per call.
+	public static void setFontScale(double scale) {
+		setFontScale(scale, KubeUIConfig.persistScaleAndTheme.get());
+	}
+
+	/// Same as [#setFontScale(double)], but `persist` overrides `KubeUIConfig.persistScaleAndTheme`
+	/// for this one call.
+	public static void setFontScale(double scale, boolean persist) {
+		KubeUITheme.setFontScale((float) scale);
+		if (persist) {
+			KubeUIConfig.defaultFontScale.set((double) KubeUITheme.fontScale);
+			KubeUIConfig.defaultFontScale.save();
+		}
+	}
+
+	/// Restores the default (1.0) font scale - same persistence behavior as [#setFontScale(double)].
+	public static void resetFontScale() {
+		setFontScale(KubeUITheme.DEFAULT_FONT_SCALE);
+	}
+
+	/// The current global font scale (see [#setFontScale(double)]).
+	public static float getFontScale() {
+		return KubeUITheme.fontScale;
 	}
 
 	/// Registers `name` as a client-only command (typed as `/name`) that runs `callback` - the
@@ -1147,7 +1700,7 @@ public class KubeUIScreenBuilder {
 		String id = entry.effectiveId();
 
 		if (id != null && entries.stream().anyMatch(e -> id.equals(e.effectiveId()))) {
-			KubeUI.LOGGER.warn("KubeUI: duplicate element id '{}' added to the same builder - lookups by id will only ever reach one of them.", id);
+			KubeUI.LOGGER.warn("KubeUI: duplicate element id '{}' ({}) added to the same builder - lookups by id will only ever reach one of them.", id, describeElement(element));
 		}
 
 		entries.add(entry);
@@ -1162,19 +1715,35 @@ public class KubeUIScreenBuilder {
 		return true;
 	}
 
+	/// A callback that blocks the render thread for this long or more gets a logged warning -
+	/// a script callback this slow makes the whole game stutter every time it fires,
+	/// which is worth flagging even though (unlike an exception) it isn't otherwise detectable
+	/// without a profiler already attached.
+	private static final long SLOW_CALLBACK_WARN_NANOS = 50_000_000L;
+
+	private static void warnIfSlow(String kind, long startNanos) {
+		long elapsedNanos = System.nanoTime() - startNanos;
+		if (elapsedNanos > SLOW_CALLBACK_WARN_NANOS) {
+			KubeUI.LOGGER.warn("KubeUI: a {} took {}ms to run - that blocks the render thread and will make the whole game stutter while it runs.", kind, elapsedNanos / 1_000_000);
+		}
+	}
+
 	/// A bug in a script's callback (e.g. `values.lenght` instead of `.length`) shouldn't be able
 	/// to crash the whole game via an uncaught exception bubbling out of Minecraft's input
 	/// handling - every callback taken by this class is wrapped with this (or [#safeBi]) at the
-	/// point it's stored, logging instead of propagating.
+	/// point it's stored, logging instead of propagating. Also times each call ([#warnIfSlow]).
 	private static Consumer<KubeUIContext> safe(Consumer<KubeUIContext> callback) {
 		if (callback == null) {
 			return null;
 		}
 		return ctx -> {
+			long start = System.nanoTime();
 			try {
 				callback.accept(ctx);
 			} catch (Exception e) {
 				KubeUI.LOGGER.error("KubeUI: error in a screen callback", e);
+			} finally {
+				warnIfSlow("screen callback", start);
 			}
 		};
 	}
@@ -1184,10 +1753,13 @@ public class KubeUIScreenBuilder {
 			return null;
 		}
 		return (ctx, value) -> {
+			long start = System.nanoTime();
 			try {
 				callback.accept(ctx, value);
 			} catch (Exception e) {
 				KubeUI.LOGGER.error("KubeUI: error in a widget callback", e);
+			} finally {
+				warnIfSlow("widget callback", start);
 			}
 		};
 	}
@@ -1197,10 +1769,13 @@ public class KubeUIScreenBuilder {
 			return null;
 		}
 		return () -> {
+			long start = System.nanoTime();
 			try {
 				callback.run();
 			} catch (Exception e) {
 				KubeUI.LOGGER.error("KubeUI: error in a confirm()/alert() callback", e);
+			} finally {
+				warnIfSlow("confirm()/alert() callback", start);
 			}
 		};
 	}
@@ -1210,21 +1785,27 @@ public class KubeUIScreenBuilder {
 			return null;
 		}
 		return (ctx, from, to) -> {
+			long start = System.nanoTime();
 			try {
 				callback.onReorder(ctx, from, to);
 			} catch (Exception e) {
 				KubeUI.LOGGER.error("KubeUI: error in a reorderableList() onReorder callback", e);
+			} finally {
+				warnIfSlow("reorderableList() onReorder callback", start);
 			}
 		};
 	}
 
 	private static Supplier<Object> safeSupplier(Supplier<Object> supplier) {
 		return () -> {
+			long start = System.nanoTime();
 			try {
 				return supplier.get();
 			} catch (Exception e) {
 				KubeUI.LOGGER.error("KubeUI: error in a bind() supplier", e);
 				return null;
+			} finally {
+				warnIfSlow("bind() supplier", start);
 			}
 		};
 	}
@@ -1234,26 +1815,54 @@ public class KubeUIScreenBuilder {
 			return null;
 		}
 		return ctx -> {
+			long start = System.nanoTime();
 			try {
 				return supplier.apply(ctx);
 			} catch (Exception e) {
 				KubeUI.LOGGER.error("KubeUI: error in a contextMenu() items supplier", e);
 				return List.of();
+			} finally {
+				warnIfSlow("contextMenu() items supplier", start);
 			}
 		};
 	}
 
 	private Style lastStyle() {
+		return lastEntry().style;
+	}
+
+	private Entry lastEntry() {
 		if (entries.isEmpty()) {
 			throw new IllegalStateException("Call width()/height()/align()/padding() after adding an element, not before");
 		}
-		return entries.get(entries.size() - 1).style;
+		return entries.get(entries.size() - 1);
+	}
+
+	/// A short, human-readable `Type('id')`/`Type` tag for an element - used in error/warning
+	/// messages so a scripter can tell *which* of possibly dozens of widgets a message
+	/// is about, instead of "somewhere in your script". Not exhaustively tuned per element type -
+	/// the class's simple name (with the `Element` suffix dropped) plus [#naturalId] already covers
+	/// every element without needing a per-type message string to maintain.
+	private static String describeElement(Element element) {
+		String type = element.getClass().getSimpleName();
+		if (type.endsWith("Element")) {
+			type = type.substring(0, type.length() - "Element".length());
+		}
+		String id = naturalId(element);
+		return id != null ? type + "('" + id + "')" : type;
 	}
 
 	private KubeUIScreenBuilder childBuilder() {
+		if (nestingDepth >= MAX_NESTING_DEPTH) {
+			throw new IllegalStateException(
+				"KubeUI: layout nested " + MAX_NESTING_DEPTH + "+ levels deep (.row()/.grid()/.scrollPanel()/.tab()/.accordion()/...) "
+					+ "- this is almost certainly a bug (e.g. an unbounded recursive helper) rather than an intentionally deep screen; flatten it instead."
+			);
+		}
 		var b = new KubeUIScreenBuilder();
 		b.elementWidth = this.elementWidth;
 		b.buttonHeight = this.buttonHeight;
+		b.nestingDepth = this.nestingDepth + 1;
 		return b;
 	}
 
@@ -1285,6 +1894,7 @@ public class KubeUIScreenBuilder {
 		Integer absoluteX;
 		Integer absoluteY;
 		Integer zIndex;
+		String requiredPermission;
 		float alignX = 0.5f;
 		float alignY = 0.5f;
 		int paddingLeft;
@@ -1306,6 +1916,8 @@ public class KubeUIScreenBuilder {
 		Consumer<KubeUIContext> onDoubleClick;
 		Integer hoverPreviewDelayMs;
 		Consumer<KubeUIScreenBuilder> hoverPreviewBuilder;
+		Integer styleColor;
+		Integer styleAccent;
 	}
 
 	static final class Binding {
@@ -1348,6 +1960,7 @@ public class KubeUIScreenBuilder {
 			case NumberElement e -> e.id();
 			case ColorPickerElement e -> e.id();
 			case CheckboxGroupElement e -> e.id();
+			case RecipeSlotElement e -> e.id();
 			default -> null;
 		};
 	}
@@ -1386,6 +1999,9 @@ public class KubeUIScreenBuilder {
 	}
 
 	record ItemElement(ItemStack stack, Consumer<KubeUIContext> onClick) implements Element {
+	}
+
+	record RecipeSlotElement(String id, List<String> itemIds, Consumer<KubeUIContext> onClick) implements Element {
 	}
 
 	record CustomElement(String type, Object[] args) implements Element {

@@ -18,12 +18,14 @@ import java.util.function.Consumer;
 class KubeUIRichText extends AbstractWidget implements KubeUINarratable {
 	private final Font font;
 	private final Consumer<MouseButtonEvent> onClick;
+	private final Integer styleColor;
 	private String narration;
 
-	KubeUIRichText(int x, int y, int width, int height, Component text, Font font, Consumer<MouseButtonEvent> onClick) {
+	KubeUIRichText(int x, int y, int width, int height, Component text, Font font, Consumer<MouseButtonEvent> onClick, Integer styleColor) {
 		super(x, y, width, height, text);
 		this.font = font;
 		this.onClick = onClick;
+		this.styleColor = styleColor;
 		this.active = onClick != null;
 	}
 
@@ -48,7 +50,9 @@ class KubeUIRichText extends AbstractWidget implements KubeUINarratable {
 		if (active && isHovered()) {
 			graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0x30FFFFFF);
 		}
-		graphics.textWithWordWrap(font, getMessage(), getX(), getY(), getWidth(), KubeUITheme.textColor);
+		int color = styleColor != null ? styleColor : KubeUITheme.textColor();
+		KubeUIFontScale.draw(graphics, getX(), getY(), () ->
+			graphics.textWithWordWrap(font, getMessage(), getX(), getY(), getWidth(), color));
 	}
 
 	@Override

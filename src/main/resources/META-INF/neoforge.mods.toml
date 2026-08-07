@@ -10,6 +10,12 @@ displayName = "${mod_name}"
 authors = "${mod_authors}"
 description = '''${mod_description}'''
 logoFile = "kubeui_logo.png"
+# curseupdate.com maps our CurseForge project (id 1635257) to the Forge/NeoForge update-checker
+# JSON format - no CurseForge API key needed (their own Core API requires one; this doesn't).
+# NeoForge's VersionChecker (net.neoforged.fml.VersionChecker) fetches and caches this
+# automatically at FMLCommonSetupEvent, once per game launch - see KubeUIUpdateChecker, which
+# reads the cached result to tell the player in chat when they join a world.
+updateJSONURL = "https://neoforge.curseupdate.com/1635257/${mod_id}"
 
 [[dependencies.${mod_id}]]
 modId = "neoforge"
