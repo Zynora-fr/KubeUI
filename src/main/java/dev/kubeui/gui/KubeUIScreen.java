@@ -616,6 +616,10 @@ public class KubeUIScreen extends Screen {
 
 		tickScrollMomentum();
 		tickHoverPreviews(now);
+
+		if (builder.onTickCallback != null) {
+			builder.onTickCallback.accept(context);
+		}
 	}
 
 	@Override

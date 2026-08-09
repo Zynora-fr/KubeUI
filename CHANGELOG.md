@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.4.0-1.21.1
+
+Port of 0.4.0 to NeoForge 1.21.1 (KubeJS 2101.7.2-build.368) - full feature parity with the main
+0.4.0 branch (see [github.com/Zynora-fr/KubeUI](https://github.com/Zynora-fr/KubeUI) for the
+complete feature list: economy, machines & automation, world map, dialogue, storage, progression,
+combat & status HUD, structures & dungeons, guilds & factions, social, housing & claims, settings
+hub, the machine screen redesign, JS-only slash commands for guild/party/housing, the tabbed social
+screen, custom leaderboards, scriptable guild/party rules, and `KubeUIHud`), rebuilt against
+1.21.1's own real APIs. Real, version-specific adaptations along the way (not guessed - each
+verified against this exact NeoForge 21.1.248/KubeJS 2101.7.2 build):
+
+- `ResourceLocation` (26.1.2's `Identifier` is this version's `Identifier`... this version *is*
+  `ResourceLocation` - the rename only exists going the other way) - same API surface otherwise
+  (`tryParse`/`fromNamespaceAndPath`/`withDefaultNamespace` all real here too).
+- Block entity persistence is the pre-`ValueInput`/`ValueOutput` `saveAdditional(CompoundTag,
+  HolderLookup.Provider)`/`loadAdditional(...)` shape; `CompoundTag` itself has no `getXxxOr(...)`/
+  `getListOrEmpty(...)`/`getCompoundOrEmpty(...)` convenience API at all on this version - not even
+  through KubeJS, which doesn't add it either (26.1.2's `CompoundTag` gained these natively as real
+  Mojang methods, nothing KubeJS-specific). `KubeUINbtCompat` reproduces the 26.1.2 semantics for
+  this project's own Java call sites; `KubeUINbtView` (a real public class, since KubeJS's own
+  `CompoundTag`-to-JS conversion falls back to normal reflection for any method name that isn't
+  itself a stored NBT key) does the same for scripts - every JS-facing touchpoint that used to hand
+  out a raw `CompoundTag` (`KubeUIActionHandler#handle`, `KubeUIRemoteScreens#register`, and a
+  handful of `KubeUIActions` methods like `.claimsOf`/`.guildMembers`/`.playerData`) hands out this
+  wrapper instead, so a script written as `data.getStringOr('key', 'fallback')` works unmodified
+  either way. `KubeUINbtView` also implements KubeJS's own `NBTSerializable` so the reverse
+  direction - a script handing one straight back into `KubeUIActions.openRemote(...)` - serializes
+  correctly instead of silently dropping the value.
+- The currency ledger's `KubeUICurrency.load(server)` no longer clears already-registered
+  currencies: on a singleplayer/integrated server, `server_scripts` top-level code (where
+  `KubeUIActions.registerCurrency(...)` normally lives) runs *before* `ServerAboutToStartEvent`
+  fires this, so clearing it here was wiping out every currency a script had just registered
+  (`/money balance` always reporting "no currencies registered" was the real, reported symptom).
+  Same fix landed on the main 0.4.0 branch - this wasn't 1.21.1-specific, just first caught here.
+- `AbstractContainerScreen`'s real override points are `renderBg(GuiGraphics, float, int, int)`/
+  `renderLabels(GuiGraphics, int, int)` (different names *and* argument order from 26.1.2's
+  `extractBackground`/`extractLabels`); a plain `Screen` subclass's is `render(GuiGraphics, int,
+  int, float)`. `GuiGraphicsExtractor` (this project's existing 26.1.2-API-shape compatibility
+  shim over the real `GuiGraphics`) is constructed explicitly at each of these bridge points.
+- `ClickType` (not `ContainerInput`) for `AbstractContainerMenu#clicked`; `Commands.LEVEL_GAMEMASTERS`
+  is a plain numeric op-level constant with no `Commands.hasPermission(int)` static helper - real
+  permission gating is `.requires(source => source.hasPermission(Commands.LEVEL_GAMEMASTERS))` (JS
+  commands) / `player.hasPermissions(level)` (plain Java) instead.
+- `Item#getBurnTime(RecipeType)`/`AbstractFurnaceBlockEntity.isFuel(...)` (no `Level#fuelValues()`
+  registry yet) for the machine block's real furnace-shaped fuel slot; `BlockEntityType.Builder.of(
+  factory, blocks...).build(null)` (no bare public constructor yet) for block-entity-type
+  registration; `DeferredRegister.Blocks#registerBlock(name, factory, Properties)` takes a plain
+  `Properties`, not a `Supplier<Properties>`.
+
+No functional or content changes versus the main 0.4.0 branch.
+
 ## 0.3.0-1.21.1
 
 Port of 0.3.0 to NeoForge 1.21.1 (KubeJS 2101.7.2-build.368) - same feature set as 0.3.0 below,

@@ -1,5 +1,7 @@
 package dev.kubeui;
 
+import dev.kubeui.gui.KubeUIBlockEntities;
+import dev.kubeui.gui.KubeUIBlocks;
 import dev.kubeui.gui.KubeUIConfig;
 import dev.kubeui.gui.KubeUIItems;
 import dev.kubeui.gui.KubeUIMenus;
@@ -19,5 +21,7 @@ public class KubeUI {
 		KubeUIConfig.register(modContainer);
 		KubeUIMenus.register(modEventBus);
 		KubeUIItems.register(modEventBus);
+		KubeUIBlocks.register(modEventBus);
+		KubeUIBlockEntities.register(modEventBus);
 	}
 }

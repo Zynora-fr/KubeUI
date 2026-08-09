@@ -23,88 +23,114 @@ import org.joml.Matrix4f;
 /// widget's `extractWidgetRenderState`/`extractBackground`/`extractRenderState` body can stay
 /// unchanged, only the bridge point where the real vanilla lifecycle hands off to KubeUI needs
 /// to wrap a real `GuiGraphics` into one of these first.
-final class GuiGraphicsExtractor {
+public final class GuiGraphicsExtractor {
 	private final GuiGraphics delegate;
 	private final PoseHandle poseHandle;
 
-	GuiGraphicsExtractor(GuiGraphics delegate) {
+	public GuiGraphicsExtractor(GuiGraphics delegate) {
 		this.delegate = delegate;
 		this.poseHandle = new PoseHandle(delegate.pose());
 	}
 
-	GuiGraphics real() {
+	public GuiGraphics real() {
 		return delegate;
 	}
 
-	void fill(int x0, int y0, int x1, int y1, int color) {
+	public void fill(int x0, int y0, int x1, int y1, int color) {
 		delegate.fill(x0, y0, x1, y1, color);
 	}
 
-	void outline(int x, int y, int width, int height, int color) {
+	public void outline(int x, int y, int width, int height, int color) {
 		delegate.renderOutline(x, y, width, height, color);
 	}
 
-	int guiWidth() {
+	public void horizontalLine(int x0, int x1, int y, int color) {
+		delegate.hLine(x0, x1, y, color);
+	}
+
+	public void verticalLine(int x, int y0, int y1, int color) {
+		delegate.vLine(x, y0, y1, color);
+	}
+
+	public void enableScissor(int x0, int y0, int x1, int y1) {
+		delegate.enableScissor(x0, y0, x1, y1);
+	}
+
+	public void disableScissor() {
+		delegate.disableScissor();
+	}
+
+	/// 1.21.1's real `GuiGraphics#fillGradient` takes the same `(x0, y0, x1, y1, colorFrom,
+	/// colorTo)` shape 26.1.2's does - this method has existed unchanged on both versions.
+	public void fillGradient(int x0, int y0, int x1, int y1, int colorFrom, int colorTo) {
+		delegate.fillGradient(x0, y0, x1, y1, colorFrom, colorTo);
+	}
+
+	public int guiWidth() {
 		return delegate.guiWidth();
 	}
 
-	PoseHandle pose() {
+	public int guiHeight() {
+		return delegate.guiHeight();
+	}
+
+	public PoseHandle pose() {
 		return poseHandle;
 	}
 
-	void text(Font font, String str, int x, int y, int color, boolean dropShadow) {
+	public void text(Font font, String str, int x, int y, int color, boolean dropShadow) {
 		delegate.drawString(font, str, x, y, color, dropShadow);
 	}
 
-	void text(Font font, Component text, int x, int y, int color, boolean dropShadow) {
+	public void text(Font font, Component text, int x, int y, int color, boolean dropShadow) {
 		delegate.drawString(font, text, x, y, color, dropShadow);
 	}
 
-	void text(Font font, FormattedCharSequence text, int x, int y, int color, boolean dropShadow) {
+	public void text(Font font, FormattedCharSequence text, int x, int y, int color, boolean dropShadow) {
 		delegate.drawString(font, text, x, y, color, dropShadow);
 	}
 
-	void centeredText(Font font, String str, int x, int y, int color) {
+	public void centeredText(Font font, String str, int x, int y, int color) {
 		delegate.drawCenteredString(font, str, x, y, color);
 	}
 
-	void centeredText(Font font, Component text, int x, int y, int color) {
+	public void centeredText(Font font, Component text, int x, int y, int color) {
 		delegate.drawCenteredString(font, text, x, y, color);
 	}
 
-	void centeredText(Font font, FormattedCharSequence text, int x, int y, int color) {
+	public void centeredText(Font font, FormattedCharSequence text, int x, int y, int color) {
 		delegate.drawCenteredString(font, text, x, y, color);
 	}
 
-	void textWithWordWrap(Font font, FormattedText text, int x, int y, int width, int color) {
+	public void textWithWordWrap(Font font, FormattedText text, int x, int y, int width, int color) {
 		delegate.drawWordWrap(font, text, x, y, width, color);
 	}
 
-	void item(ItemStack itemStack, int x, int y) {
+	public void item(ItemStack itemStack, int x, int y) {
 		delegate.renderItem(itemStack, x, y);
 	}
 
-	void item(ItemStack itemStack, int x, int y, int seed) {
+	public void item(ItemStack itemStack, int x, int y, int seed) {
 		delegate.renderItem(itemStack, x, y, seed);
 	}
 
-	void item(LivingEntity owner, ItemStack itemStack, int x, int y, int seed) {
+	public void item(LivingEntity owner, ItemStack itemStack, int x, int y, int seed) {
 		delegate.renderItem(owner, itemStack, x, y, seed);
 	}
 
-	void itemDecorations(Font font, ItemStack itemStack, int x, int y) {
+	public void itemDecorations(Font font, ItemStack itemStack, int x, int y) {
 		delegate.renderItemDecorations(font, itemStack, x, y);
 	}
 
-	void itemDecorations(Font font, ItemStack itemStack, int x, int y, String countText) {
+	public void itemDecorations(Font font, ItemStack itemStack, int x, int y, String countText) {
 		delegate.renderItemDecorations(font, itemStack, x, y, countText);
 	}
 
-	void fakeItem(ItemStack itemStack, int x, int y) {
+	public void fakeItem(ItemStack itemStack, int x, int y) {
 		delegate.renderFakeItem(itemStack, x, y);
 	}
 
-	void fakeItem(ItemStack itemStack, int x, int y, int seed) {
+	public void fakeItem(ItemStack itemStack, int x, int y, int seed) {
 		delegate.renderFakeItem(itemStack, x, y, seed);
 	}
 
@@ -113,7 +139,7 @@ final class GuiGraphicsExtractor {
 	/// menu-background-only post-process the game itself decides to run, not something a screen
 	/// can request on demand. No-op here; `.background("blur")` degrades to the plain dark-tint
 	/// fallback on this version instead of a real blur.
-	void blurBeforeThisStratum() {
+	public void blurBeforeThisStratum() {
 	}
 
 	/// Simple 1:1 blit (destination size == source crop size in pixels) - the common case for a
@@ -121,7 +147,7 @@ final class GuiGraphicsExtractor {
 	/// ignored (1.21.1 has no `RenderPipelines`/pipeline concept for 2D blits at all); kept as a
 	/// parameter purely so call sites written against 26.1.2's `blit(RenderPipelines.GUI_TEXTURED,
 	/// ...)` convention don't need touching.
-	void blit(Object pipeline, ResourceLocation texture, int x, int y, float u, float v, int width, int height, int textureWidth, int textureHeight) {
+	public void blit(Object pipeline, ResourceLocation texture, int x, int y, float u, float v, int width, int height, int textureWidth, int textureHeight) {
 		delegate.blit(texture, x, y, u, v, width, height, textureWidth, textureHeight);
 	}
 
@@ -133,7 +159,7 @@ final class GuiGraphicsExtractor {
 	/// to `net.minecraft.client.gui`, so this reproduces it directly - same shader, same vertex
 	/// format, same call sequence as vanilla's own `innerBlit(ResourceLocation, x1, x2, y1, y2,
 	/// blitOffset, u0, u1, v0, v1)`.
-	void blit(Object pipeline, ResourceLocation texture, int x, int y, int u, int v, int width, int height, int srcWidth, int srcHeight, int sheetWidth, int sheetHeight) {
+	public void blit(Object pipeline, ResourceLocation texture, int x, int y, int u, int v, int width, int height, int srcWidth, int srcHeight, int sheetWidth, int sheetHeight) {
 		if (width <= 0 || height <= 0) {
 			return;
 		}
@@ -156,7 +182,7 @@ final class GuiGraphicsExtractor {
 	/// Mirrors the small 2D-convenience subset of 26.1.2's `Matrix3x2fStack` (`pushMatrix`/
 	/// `popMatrix`/`scaleAround`/`translate`) that KubeUI's own render code uses, backed by
 	/// 1.21.1's real `PoseStack` (a 3D matrix stack - every 2D op here is a Z=0 special case).
-	static final class PoseHandle {
+	public static final class PoseHandle {
 		private final PoseStack delegate;
 
 		private PoseHandle(PoseStack delegate) {

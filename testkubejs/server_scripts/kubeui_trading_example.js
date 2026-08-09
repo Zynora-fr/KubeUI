@@ -16,7 +16,7 @@ KubeUIActions.registerTradePool('kubeui_demo:trader', [
     { id: 'emerald_for_diamond', weight: 3, costs: [{ item: 'minecraft:emerald', count: 10 }], resultItem: 'minecraft:diamond', resultCount: 1, maxUses: 1, restockTicks: 24000 },
 ])
 
-// A second pool demonstrating condition-gated trades (Phase-equivalent "reputation/quest"): only
+// A second pool demonstrating condition-gated trades ("reputation/quest"-equivalent): only
 // shows up once the quest board example's "Gather Wood" quest has actually been completed - real
 // cross-feature integration, not a fabricated example. Tag a *different* entity with this pool to
 // try it: /kubeui tag-trader @e[type=minecraft:villager,limit=1,sort=nearest] kubeui_demo:quest_reward_trader
@@ -27,7 +27,19 @@ KubeUIActions.registerTradePool('kubeui_demo:quest_reward_trader', [
     return quests.getStringOr('quest_gather_wood', '') === 'completed'
 })
 
+// tradeHistory(...) returns one entry per completed trade (the same id repeated once per
+// completion, oldest first) - readable as a tally ("3x wood_for_emerald") instead of a raw
+// repeated list, which gets unreadable fast for a trader-designer-made trade (those get an
+// auto-generated 'trade_<uuid>' id, since the designer has no name field).
 KubeUIActions.register('kubeui_demo:trade_history', (player, data) => {
     let history = KubeUIActions.tradeHistory(player)
-    player.tell('§bTrade history: ' + (history.length > 0 ? history.join(', ') : '(none yet)'))
+    if (history.length === 0) {
+        player.tell('§bTrade history: (none yet)')
+        return
+    }
+
+    let counts = {}
+    history.forEach(id => counts[id] = (counts[id] || 0) + 1)
+    let summary = Object.keys(counts).map(id => counts[id] + 'x ' + id).join(', ')
+    player.tell('§bTrade history: ' + summary)
 })

@@ -1,7 +1,7 @@
 // The "real" shop: right-click an Emerald Block to open it, like a shop terminal a server admin
 // would actually place down - not an auto-opened menu button. All it does client-side is draw
 // the catalog and forward a plain item id to the server; the real logic (price, whether you can
-// afford it, whether you have room, actually taking the emeralds and handing over the item) all
+// afford it, whether you have room, actually charging the gold and handing over the item) all
 // lives in server_scripts/kubeui_shop_real.js. This mirrors what a real shop plugin looks like:
 // the client is just a menu, the server is the cash register.
 
@@ -28,20 +28,20 @@ const SHOP_DISPLAY = [
 ]
 
 function openRealShop() {
-    let builder = KubeUI.builder('Emerald Shop')
-        .label('info', 'Pay with real emeralds from your inventory.')
+    let builder = KubeUI.builder('Gold Shop')
+        .label('info', 'Pay with your KubeUI "gold" balance (check it with /money balance gold).')
         .divider()
 
     builder.scrollPanel(150, panel => {
         SHOP_DISPLAY.forEach(item => {
             panel.row(row => {
                 row.item(item.id, item.count)
-                    .tooltip(item.name + ' - ' + item.price + ' emerald' + (item.price === 1 ? '' : 's'))
+                    .tooltip(item.name + ' - ' + item.price + ' gold')
                     .sound('minecraft:item.armor.equip_generic')
 
                 row.label('name_' + item.id, item.name).width(120)
 
-                row.button('Buy (' + item.price + ' emerald' + (item.price === 1 ? '' : 's') + ')', screen => {
+                row.button('Buy (' + item.price + ' gold)', screen => {
                     // Only ever sends the id. The server decides the price, whether it's
                     // affordable, and whether there's room - see kubeui_shop_real.js.
                     screen.runServerAction('kubeui_shop:buy_real', { item: item.id })

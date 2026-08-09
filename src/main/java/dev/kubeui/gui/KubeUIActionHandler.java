@@ -1,6 +1,5 @@
 package dev.kubeui.gui;
 
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 
 /// Registered (typically from a `server_scripts` file, via `KubeUIActions.register`) to validate
@@ -10,5 +9,5 @@ import net.minecraft.server.level.ServerPlayer;
 /// sent, the same way you would for any other player-triggered server action.
 @FunctionalInterface
 public interface KubeUIActionHandler {
-	void handle(ServerPlayer player, CompoundTag data);
+	void handle(ServerPlayer player, KubeUINbtView data);
 }

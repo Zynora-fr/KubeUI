@@ -14,7 +14,7 @@ import java.util.function.Consumer;
 /// updating an already-open one via `screen.update(...)`) from `data` - KubeUI itself has no
 /// opinion on what that screen looks like.
 public final class KubeUIRemoteScreens {
-	private static final Map<String, Consumer<CompoundTag>> HANDLERS = new ConcurrentHashMap<>();
+	private static final Map<String, Consumer<KubeUINbtView>> HANDLERS = new ConcurrentHashMap<>();
 
 	private KubeUIRemoteScreens() {
 	}
@@ -22,7 +22,7 @@ public final class KubeUIRemoteScreens {
 	/// Registers (or replaces) the handler for `screenId`. `onReceive` is called with whatever
 	/// `data` the server sent, both when the server explicitly opens this screen for a player and
 	/// when it broadcasts an update to one already showing.
-	public static void register(String screenId, Consumer<CompoundTag> onReceive) {
+	public static void register(String screenId, Consumer<KubeUINbtView> onReceive) {
 		if (screenId == null || onReceive == null) {
 			KubeUI.LOGGER.error("KubeUIRemoteScreens.register needs a non-null screenId and onReceive - ignoring (screenId={})", screenId);
 			return;
@@ -48,7 +48,7 @@ public final class KubeUIRemoteScreens {
 	static void receive(String screenId, CompoundTag data) {
 		var handler = HANDLERS.get(screenId);
 		if (handler != null) {
-			handler.accept(data);
+			handler.accept(new KubeUINbtView(data));
 		} else {
 			KubeUI.LOGGER.warn("Received KubeUI remote screen '{}' with no matching KubeUIRemoteScreens.register(...) on this client", screenId);
 		}

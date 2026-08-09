@@ -1,11 +1,13 @@
-// A shop that behaves like it would on a real survival server, not a demo: currency is real
-// emeralds pulled straight from the player's inventory (not a JS number that resets on relog),
-// every check happens here in server_scripts, and a successful sale is logged to the server
+// A shop that behaves like it would on a real survival server, not a demo: currency is the same
+// virtual "gold" ledger every other KubeUI shop runs on (see kubeui_economy_demo.js /
+// KubeUICurrency) - not a raw item pulled from the inventory, so it can't be duped by dropping/
+// hoarding emeralds and persists through KubeUICurrency's own disk-backed ledger across restarts.
+// Every check happens here in server_scripts, and a successful sale is logged to the server
 // console the way a real shop plugin keeps an audit trail. The client (see
 // client_scripts/kubeui_shop_real.js) only ever sends an item id - it has no way to lie about
 // how much it's paying, because the server never reads a price or a balance from it.
 
-const CURRENCY_ITEM = 'minecraft:emerald'
+KubeUIActions.registerCurrency('gold')
 
 // The catalog lives here, not in the client script - this is the only copy that's ever trusted.
 // The client keeps its own copy purely to render the list before you click Buy.
@@ -20,34 +22,6 @@ const SHOP_CATALOG = {
     'minecraft:totem_of_undying': { name: 'Totem of Undying', price: 20 },
 }
 
-// Drains `amount` currency items out of the player's inventory. Only call this after confirming
-// (via kjs$count, below) that the player actually has enough - a stack can be split across
-// several slots, so this keeps pulling from matched slots until the full amount is gone.
-//
-// Uses .getCount() (an explicit method call) rather than the .count bean property - in-game
-// testing showed .count comes back undefined on a stack read via getStackInSlot(), which turned
-// into a silent NaN and crashed extractItem() ("Cannot convert NaN to int"). getCount() is
-// ItemStack's real, unambiguous vanilla method (confirmed in the decompiled MC source), so it
-// isn't subject to whatever Rhino bean-mapping quirk broke the shorthand.
-function removeCurrency(player, amount) {
-    let remaining = amount
-    let inventory = player.inventory
-    let safetyGuard = 0 // extra insurance against ever looping forever if a slot lookup misbehaves
-
-    while (remaining > 0 && safetyGuard < 64) {
-        safetyGuard++
-
-        let slot = inventory.find(CURRENCY_ITEM)
-        if (slot < 0) return false // shouldn't happen after the count() check above, but never trust it blindly
-
-        let take = Math.min(remaining, inventory.getStackInSlot(slot).getCount())
-        inventory.extractItem(slot, take, false)
-        remaining -= take
-    }
-
-    return remaining <= 0
-}
-
 KubeUIActions.register('kubeui_shop:buy_real', (player, data) => {
     let itemId = data.getStringOr('item', '')
     let entry = SHOP_CATALOG[itemId]
@@ -60,14 +34,8 @@ KubeUIActions.register('kubeui_shop:buy_real', (player, data) => {
 
     let count = entry.count || 1
     let price = entry.price
-    let owned = player.inventory.count(CURRENCY_ITEM)
 
-    if (owned < price) {
-        player.tell('§cNot enough emeralds for ' + entry.name + ' - you have ' + owned + ', need ' + price + '.')
-        return
-    }
-
-    // Simulate the payout first: if there's no room for it, don't take the player's emeralds for
+    // Simulate the payout first: if there's no room for it, don't take the player's gold for
     // nothing. `insertItem(stack, true)` never mutates the inventory - it just reports back
     // whatever wouldn't fit.
     let leftover = player.inventory.insertItem(Item.of(itemId, count), true)
@@ -76,14 +44,15 @@ KubeUIActions.register('kubeui_shop:buy_real', (player, data) => {
         return
     }
 
-    if (!removeCurrency(player, price)) {
-        player.tell('§cSomething went wrong taking your emeralds - purchase cancelled, nothing was charged.')
-        console.warn('[kubeui shop] removeCurrency failed for ' + player.username + ' buying ' + itemId)
+    // KubeUIActions.charge is atomic - fails cleanly (nothing taken) if the balance is too low,
+    // no separate "count then remove" dance like the old raw-emerald version needed.
+    if (!KubeUIActions.charge(player, 'gold', price)) {
+        player.tell('§cNot enough gold for ' + entry.name + ' - you have ' + KubeUIActions.balance(player, 'gold') + ', need ' + price + '.')
         return
     }
 
     player.inventory.insertItem(Item.of(itemId, count), false)
 
-    player.tell('§aBought ' + entry.name + ' for ' + price + ' emerald' + (price === 1 ? '' : 's') + '.')
-    console.log('[kubeui shop] ' + player.username + ' bought ' + count + 'x ' + itemId + ' for ' + price + ' emeralds')
+    player.tell('§aBought ' + entry.name + ' for ' + price + ' gold. Balance: ' + KubeUIActions.balance(player, 'gold') + '.')
+    console.log('[kubeui shop] ' + player.username + ' bought ' + count + 'x ' + itemId + ' for ' + price + ' gold')
 })

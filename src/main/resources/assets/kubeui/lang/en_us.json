@@ -1,3 +1,14 @@
 {
-  "item.kubeui.trader_egg": "Custom Trader Egg"
+  "item.kubeui.trader_egg": "Custom Trader Egg",
+  "item.kubeui.backpack": "Backpack",
+  "block.kubeui.storage_crate": "Storage Crate",
+  "kubeui.storage.locked": "This storage is locked.",
+  "kubeui.storage.search": "Search",
+  "kubeui.storage.search_hint": "Search...",
+  "kubeui.storage.settings": "Settings",
+  "kubeui.storage.sort.name": "Sort: Name",
+  "kubeui.storage.sort.count": "Sort: Count",
+  "kubeui.storage.sort.category": "Sort: Category",
+  "block.kubeui.machine": "Machine",
+  "block.container.kubeui.machine": "Machine"
 }
