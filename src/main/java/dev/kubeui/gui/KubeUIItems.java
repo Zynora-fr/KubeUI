@@ -16,6 +16,18 @@ public final class KubeUIItems {
 
 	static final DeferredItem<KubeUITraderEggItem> TRADER_EGG = ITEMS.registerItem("trader_egg", KubeUITraderEggItem::new);
 
+	/// [KubeUIBackpackItem].
+	static final DeferredItem<KubeUIBackpackItem> BACKPACK = ITEMS.registerItem("backpack", KubeUIBackpackItem::new);
+
+	/// The real `BlockItem` for [KubeUIStorageBlock] - without this, the block exists
+	/// as a registry entry but a player has no way to ever obtain/place one in survival.
+	static final DeferredItem<net.minecraft.world.item.BlockItem> STORAGE_CRATE = ITEMS.registerSimpleBlockItem(KubeUIBlocks.STORAGE);
+
+	/// The real `BlockItem` for [KubeUIMachineBlock] - `KubeUIActions.giveMachineItem(...)`
+	/// is the real way a player gets one already set to a specific kind; a plain `/give` gives an
+	/// unconfigured block (empty `kind`, does nothing until a script sets one).
+	static final DeferredItem<net.minecraft.world.item.BlockItem> MACHINE = ITEMS.registerSimpleBlockItem(KubeUIBlocks.MACHINE);
+
 	public static void register(IEventBus modEventBus) {
 		ITEMS.register(modEventBus);
 	}

@@ -2,10 +2,13 @@ package dev.kubeui.plugin;
 
 import dev.kubeui.gui.KubeUIContext;
 import dev.kubeui.gui.KubeUIEvents;
+import dev.kubeui.gui.KubeUIHud;
 import dev.kubeui.gui.KubeUIRemoteScreens;
 import dev.kubeui.gui.KubeUIScreenBuilder;
 import dev.kubeui.gui.KubeUIScreenInjector;
+import dev.kubeui.gui.KubeUISettingsHub;
 import dev.kubeui.gui.KubeUISidebar;
+import dev.kubeui.gui.KubeUISocialHub;
 import dev.latvian.mods.kubejs.event.EventGroupRegistry;
 import dev.latvian.mods.kubejs.plugin.ClassFilter;
 import dev.latvian.mods.kubejs.plugin.KubeJSPlugin;
@@ -22,6 +25,9 @@ public class KubeUIPlugin implements KubeJSPlugin {
 			filter.allow(KubeUISidebar.class);
 			filter.allow(KubeUIScreenInjector.class);
 			filter.allow(KubeUIRemoteScreens.class);
+			filter.allow(KubeUISettingsHub.class);
+			filter.allow(KubeUISocialHub.class);
+			filter.allow(KubeUIHud.class);
 		}
 	}
 
@@ -32,6 +38,9 @@ public class KubeUIPlugin implements KubeJSPlugin {
 			bindings.add("KubeUISidebar", KubeUISidebar.class);
 			bindings.add("KubeUIScreenInjector", KubeUIScreenInjector.class);
 			bindings.add("KubeUIRemoteScreens", KubeUIRemoteScreens.class);
+			bindings.add("KubeUISettingsHub", KubeUISettingsHub.class);
+			bindings.add("KubeUISocialHub", KubeUISocialHub.class);
+			bindings.add("KubeUIHud", KubeUIHud.class);
 		}
 	}
 

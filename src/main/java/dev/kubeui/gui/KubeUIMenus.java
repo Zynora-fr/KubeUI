@@ -71,6 +71,45 @@ public final class KubeUIMenus {
 		"trade_execute", () -> new MenuType<>(KubeUITradeExecuteMenu::new, FeatureFlags.VANILLA_SET)
 	);
 
+	/// [KubeUIStorageBlockEntity]'s menu - real vanilla `ChestMenu` reused directly (see that
+	/// class's `createMenu`), just under KubeUI's own `MenuType` so [KubeUIStorageScreen] (not
+	/// vanilla's shared `ContainerScreen`) is what opens for it. The bare 2-arg factory (client's
+	/// own local reconstruction from `ClientboundOpenScreenPacket`, same convention as every other
+	/// entry here) needs a real, correctly-sized transient `Container` - a plain `SimpleContainer`,
+	/// exactly what vanilla's own `ChestMenu.threeRows(...)` does for the same purpose.
+	static final Supplier<MenuType<net.minecraft.world.inventory.ChestMenu>> STORAGE = MENUS.register("storage_crate", KubeUIMenus::createStorageMenuType);
+
+	/// Split out from [#STORAGE]'s own initializer - the real `ChestMenu` constructor needs the
+	/// `MenuType<?>` it's being registered under as one of its own arguments, and `javac` rejects a
+	/// field referencing itself directly inside its own initializer expression (even inside a
+	/// lambda) as a "self-reference in initializer" error. A separate method has no such
+	/// restriction - `STORAGE` is always already assigned by the time this factory lambda actually
+	/// *runs* (the client reconstructing a menu from a network packet, well after start-up
+	/// registration finished), so the self-reference itself is perfectly safe at runtime.
+	private static MenuType<net.minecraft.world.inventory.ChestMenu> createStorageMenuType() {
+		return new MenuType<>(
+			(id, inv) -> new net.minecraft.world.inventory.ChestMenu(STORAGE.get(), id, inv, new net.minecraft.world.SimpleContainer(KubeUIStorageBlockEntity.SLOT_COUNT), 3),
+			FeatureFlags.VANILLA_SET
+		);
+	}
+
+	/// [KubeUIBackpackItem]'s menu - real vanilla `ChestMenu` reused directly (see that class's
+	/// `use`), 2 rows/18 slots. Same self-referencing-factory shape as [#STORAGE] and for the same
+	/// reason - see its own comment.
+	static final Supplier<MenuType<net.minecraft.world.inventory.ChestMenu>> BACKPACK = MENUS.register("backpack", KubeUIMenus::createBackpackMenuType);
+
+	private static MenuType<net.minecraft.world.inventory.ChestMenu> createBackpackMenuType() {
+		return new MenuType<>(
+			(id, inv) -> new net.minecraft.world.inventory.ChestMenu(BACKPACK.get(), id, inv, new net.minecraft.world.SimpleContainer(KubeUIBackpackItem.SLOTS), 2),
+			FeatureFlags.VANILLA_SET
+		);
+	}
+
+	/// [KubeUIMachineBlockEntity]'s menu - its own custom [KubeUIMachineMenu], not a
+	/// reused vanilla one (unlike [#STORAGE]/[#BACKPACK]) since a machine's fixed input/output/
+	/// upgrade slot layout at real furnace coordinates isn't something any vanilla menu already is.
+	static final Supplier<MenuType<KubeUIMachineMenu>> MACHINE = MENUS.register("machine", () -> new MenuType<>(KubeUIMachineMenu::new, FeatureFlags.VANILLA_SET));
+
 	public static void register(IEventBus modEventBus) {
 		MENUS.register(modEventBus);
 	}

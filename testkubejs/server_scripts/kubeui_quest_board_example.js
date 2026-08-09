@@ -15,9 +15,8 @@ function questKey(id) {
     return 'quest_' + id
 }
 
-// Same safety-guarded "keep pulling from matched slots until the full amount is gone" pattern
-// already proven in kubeui_shop_real.js's removeCurrency - a stack can be split across several
-// slots, so a single extractItem() call isn't enough on its own.
+// Safety-guarded "keep pulling from matched slots until the full amount is gone" - a stack can
+// be split across several slots, so a single extractItem() call isn't enough on its own.
 function removeItems(player, itemId, amount) {
     let remaining = amount
     let inventory = player.inventory

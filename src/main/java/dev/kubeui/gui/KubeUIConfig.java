@@ -52,7 +52,7 @@ public final class KubeUIConfig {
 			.comment("Default theme preset name (\"default\", \"dark\", \"light\", \"high-contrast\", or a custom name a script registered via KubeUI.registerThemePreset(...)).")
 			.define("defaultTheme", "default");
 		persistScaleAndTheme = common
-			.comment("If false, KubeUI.setScale(...)/.setFontScale(...)/.setTheme(...) never write to this file (session-only, the pre-Phase-172 behavior) unless a script explicitly asks to persist via the boolean overload on a specific call.")
+			.comment("If false, KubeUI.setScale(...)/.setFontScale(...)/.setTheme(...) never write to this file (session-only, the legacy default behavior) unless a script explicitly asks to persist via the boolean overload on a specific call.")
 			.define("persistScaleAndTheme", true);
 		maxPersistedPersistKeys = common
 			.comment("Maximum number of distinct .draggable()/.builder(title, persistKey) persistKey values KubeUI remembers widget state for at once. The least-recently-used one is forgotten past this, so a script that generates many dynamic persistKeys can't grow memory use forever.")

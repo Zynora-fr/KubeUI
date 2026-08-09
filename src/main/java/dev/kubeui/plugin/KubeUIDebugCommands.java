@@ -42,7 +42,8 @@ import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 /// reachable as the shorter top-level `/quest`, which also has `/quest accept <questId>`/
 /// `/quest complete <questId>` for starting/turning in a quest with no NPC/block giver needed),
 /// and `/kubeui quest-editor` (compose a quest without writing a script - see
-/// [KubeUIQuestEditorScreen]).
+/// [KubeUIQuestEditorScreen]). See [KubeUIServerCommands] for the real server-side `/money`
+/// command (`balance`/`pay` self-service, `deposit`/`withdraw` OP-only).
 @EventBusSubscriber(modid = KubeUI.MOD_ID, value = Dist.CLIENT)
 final class KubeUIDebugCommands {
 	private KubeUIDebugCommands() {

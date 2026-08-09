@@ -94,6 +94,7 @@ public class KubeUIScreenBuilder {
 
 	Consumer<KubeUIContext> onOpenCallback;
 	Consumer<KubeUIContext> onCloseCallback;
+	Consumer<KubeUIContext> onTickCallback;
 
 	private KubeUIScreenBuilder() {
 	}
@@ -1011,6 +1012,16 @@ public class KubeUIScreenBuilder {
 		return this;
 	}
 
+	/// Called once every client tick (20/second) the screen is open, after every other per-tick
+	/// bookkeeping ([#bindings], search-box debounce, hover previews, ...) already runs - for a
+	/// screen that needs its own animation/countdown, e.g. `KubeUI.dialogue(...)`'s typewriter text
+	/// reveal and choice timer, driven this way rather than each
+	/// inventing its own separate `Screen#tick()` override.
+	public KubeUIScreenBuilder onTick(Consumer<KubeUIContext> callback) {
+		this.onTickCallback = safe(callback);
+		return this;
+	}
+
 	/// Polls `valueSupplier` every client tick; whenever the value it returns changes (by
 	/// `equals`), calls `onChange` with the new value. Use this to drive a widget from external,
 	/// changing state (e.g. `screen.setLabel`/`setProgress` from a value read off a player/block)
@@ -1321,6 +1332,87 @@ public class KubeUIScreenBuilder {
 	/// `KubeUIActions.tagQuestGiver(...)`.
 	public static void questLog() {
 		KubeUIQuestLogScreen.open();
+	}
+
+	/// Opens a read-only list of this player's own recent transactions for `currency` (or every
+	/// currency if `currency` is null/empty) - real server state, same "ask the server, open once
+	/// it replies" shape as [#recipeScreen]. See `KubeUIActions.pay`/`.charge`/`.transferCurrency`.
+	public static void currencyHistory(String currency) {
+		KubeUIEconomyBridge.requestHistory(currency);
+	}
+
+	/// Opens the top 20 balances for `currency`, highest first - see `KubeUIActions.registerCurrency`.
+	public static void leaderboard(String currency) {
+		KubeUIEconomyBridge.requestLeaderboard(currency);
+	}
+
+	/// Opens the vendor screen for a shop declared via `KubeUIActions.defineShop(shopId, ...)` -
+	/// buy/sell buttons call straight back into the same server-authoritative transaction path
+	/// `KubeUIActions.pay`/`.charge` use, nothing here is client-trusted.
+	public static void shop(String shopId) {
+		KubeUIEconomyBridge.requestShop(shopId);
+	}
+
+	/// Opens a dialogue declared via `KubeUIActions.defineDialogue(dialogueId, ...)`, starting at
+	/// its root node - `npcUuid` (optional, may be null/empty) is the interacted entity's real
+	/// UUID (as a string), passed through so the server can resolve it again for e.g. a future
+	/// `requires` check tied to that specific entity; leave it out entirely for a dialogue with no
+	/// associated NPC (started from a script's own trigger rather than a right-click).
+	public static void dialogue(String dialogueId, String npcUuid) {
+		KubeUIDialogueBridge.open(dialogueId, npcUuid);
+	}
+
+	/// Opens a read-only movement log for whatever [KubeUIStorageBlockEntity] screen
+	/// this player currently has open - only meaningful right after closing/from a storage screen's
+	/// own button, there's no other way to pick "which" storage from a script.
+	public static void storageHistory() {
+		KubeUIStorageBridge.requestHistory();
+	}
+
+	/// Opens an aggregated, read-only view of every currently-loaded container linked to
+	/// `networkId` - also the "remote preview", since this works from anywhere,
+	/// not just while standing at a member container, gated server-side on the player actually
+	/// being authorized on at least one member.
+	public static void storageNetworkView(String networkId) {
+		KubeUIStorageBridge.requestNetworkView(networkId);
+	}
+
+	/// Opens the skill tree declared via `KubeUIActions.defineSkillTree(treeId, ...)` -
+	/// unlock buttons and the respec button both call straight back into the same server-
+	/// authoritative path `KubeUIActions.unlockSkillNode`/`.respecSkillTree` use.
+	public static void skillTree(String treeId) {
+		KubeUISkillBridge.requestTree(treeId);
+	}
+
+	/// Opens a lifetime-points leaderboard for `treeId`, online players only - see
+	/// [KubeUINetworking#sendSkillLeaderboard]'s doc for why this is a reduced scope compared to
+	/// [#leaderboard(String)]'s all-time currency one.
+	public static void skillLeaderboard(String treeId) {
+		KubeUISkillBridge.requestLeaderboard(treeId);
+	}
+
+	/// Opens the full-screen, pannable/zoomable world map - see [KubeUIWorldMapScreen].
+	public static void worldMap() {
+		Minecraft.getInstance().setScreen(new KubeUIWorldMapScreen());
+	}
+
+	/// Colors real, currently-loaded entities of `entityTypeId` on the world map - see
+	/// [KubeUIMapIcons].
+	public static void registerMapIcon(String entityTypeId, long color) {
+		KubeUIMapIcons.registerEntityIcon(entityTypeId, (int) color);
+	}
+
+	/// Sends `waypoint`'s current position to `targetPlayerName` - they see a real
+	/// confirm dialog (`KubeUI.confirm()`) naming the sender and the waypoint, not a silent add.
+	/// `waypointId` must be one of this player's own real waypoints ([KubeUIWaypoints]).
+	public static void shareWaypoint(String waypointId, String targetPlayerName) {
+		KubeUIWaypointBridge.share(waypointId, targetPlayerName);
+	}
+
+	/// Opens the controller/stats view for every currently-loaded
+	/// [KubeUIMachineBlockEntity] linked to `networkId` via `KubeUIActions.setMachineNetwork(...)`.
+	public static void machineNetworkStatus(String networkId) {
+		KubeUIMachineBridge.requestNetworkStatus(networkId);
 	}
 
 	/// A human-readable, indented listing of every element's type and id in `builder` (recursing
@@ -1639,6 +1731,35 @@ public class KubeUIScreenBuilder {
 	/// unlike [#alert(String, String, Runnable)], which is a modal dialog over a specific screen.
 	public static void toast(String message, int durationMs) {
 		KubeUIToast.add(message, durationMs);
+	}
+
+	// ---------------------------------------------------------------- social: block list & notes
+
+	/// Blocks/mutes `playerId` - purely local (see [KubeUIBlockList]'s own doc for why), a script
+	/// showing guild/party/local chat or an emote from another player is expected to check
+	/// [#isPlayerBlocked] itself before displaying one.
+	public static void blockPlayer(java.util.UUID playerId) {
+		KubeUIBlockList.block(playerId);
+	}
+
+	public static void unblockPlayer(java.util.UUID playerId) {
+		KubeUIBlockList.unblock(playerId);
+	}
+
+	public static boolean isPlayerBlocked(java.util.UUID playerId) {
+		return KubeUIBlockList.isBlocked(playerId);
+	}
+
+	/// Sets (or, with a blank/`null` `note`, clears) a private local note on `playerId` - see
+	/// [KubeUIContactNotes]'s own doc for why this never leaves the client.
+	public static void setContactNote(java.util.UUID playerId, String playerName, String note) {
+		KubeUIContactNotes.set(playerId, playerName, note);
+	}
+
+	/// `""` if no note is set.
+	public static String contactNote(java.util.UUID playerId) {
+		var note = KubeUIContactNotes.get(playerId);
+		return note != null ? note.note() : "";
 	}
 
 	/// Opens a small Yes/No dialog on top of whatever screen is currently open (including another

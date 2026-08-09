@@ -1,6 +1,6 @@
 # Versioning
 
-KubeUI's own version (`mod_version` in [`gradle.properties`](gradle.properties), currently `0.3.0`)
+KubeUI's own version (`mod_version` in [`gradle.properties`](gradle.properties), currently `0.4.0`)
 follows [semver](https://semver.org/): `MAJOR.MINOR.PATCH`.
 
 - **MAJOR** - a breaking change to the *script-facing* API: a method removed/renamed, a signature

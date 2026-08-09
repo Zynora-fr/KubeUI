@@ -614,6 +614,10 @@ public class KubeUIScreen extends Screen {
 
 		tickScrollMomentum();
 		tickHoverPreviews(now);
+
+		if (builder.onTickCallback != null) {
+			builder.onTickCallback.accept(context);
+		}
 	}
 
 	@Override
@@ -1098,9 +1102,23 @@ public class KubeUIScreen extends Screen {
 			}
 			case KubeUIScreenBuilder.ButtonElement e -> {
 				int w = resolveWidth(entry, owner.elementWidth);
+				var buttonText = styledText(e.text());
+
+				// A script that didn't ask for a specific width (no .width(...)/.widthPercent(...)/
+				// responsive override on this element - it's just using the column's shared
+				// elementWidth) shouldn't have its own label clipped because that shared width
+				// happens to be too narrow for THIS button's text - a real, reported bug (long demo
+				// labels rendering with their start cut off, vanilla Button draws centered text with
+				// no truncation/wrap of its own). Only grows, never shrinks below what was actually
+				// asked for.
+				boolean explicitWidth = entry.style.width != null || entry.style.widthPercent != null || entry.style.responsiveWidth != null;
+				if (!explicitWidth) {
+					w = Math.max(w, font.width(buttonText) + 16);
+				}
+
 				int h = resolveHeight(entry, owner.buttonHeight);
 				Identifier sound = entry.style.clickSound;
-				yield Button.builder(styledText(e.text()), b -> {
+				yield Button.builder(buttonText, b -> {
 					e.onClick().accept(context);
 					playSound(sound);
 				}).bounds(0, 0, w, h).build();
@@ -1555,9 +1573,16 @@ public class KubeUIScreen extends Screen {
 		return row;
 	}
 
+	/// Real, reported bug: the height fallback used to be `owner.elementWidth` (a *column width*,
+	/// meant for buttons/labels, not a sensible preview height) - with no explicit `.height(...)`,
+	/// that made the preview exactly as tall as the screen's element width (e.g. 300px for a 300px-
+	/// wide column), a huge portrait filling most of the screen instead of a real preview size.
+	/// [#DEFAULT_ENTITY_PREVIEW_HEIGHT] is an actual portrait-appropriate default instead.
+	private static final int DEFAULT_ENTITY_PREVIEW_HEIGHT = 72;
+
 	private LayoutElement buildEntityPreview(KubeUIScreenBuilder.Entry entry, KubeUIScreenBuilder owner, KubeUIScreenBuilder.EntityPreviewElement e) {
 		int width = resolveWidth(entry, owner.elementWidth);
-		int height = resolveHeight(entry, owner.elementWidth);
+		int height = resolveHeight(entry, DEFAULT_ENTITY_PREVIEW_HEIGHT);
 		var level = Minecraft.getInstance().level;
 
 		if (level != null) {

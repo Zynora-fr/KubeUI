@@ -73,6 +73,54 @@ function openKubeUITestMenu() {
             screen.close()
             KubeUI.questLog()
         })
+        .button('Economy Demo (currency, shop, leaderboard, transaction history)', screen => {
+            screen.close()
+            openEconomyDemo()
+        })
+        .button('Dialogue Demo (branching NPC conversation)', screen => {
+            screen.close()
+            openDialogueDemo()
+        })
+        .button('Storage Demo (crates, backpack, network view)', screen => {
+            screen.close()
+            openStorageDemo()
+        })
+        .button('Skills Demo (talent tree, respec, XP HUD bar)', screen => {
+            screen.close()
+            openSkillsDemo()
+        })
+        .button('World Map Demo (pannable/zoomable map, waypoints)', screen => {
+            screen.close()
+            openWorldMapDemo()
+        })
+        .button('Machines Demo (custom machine blocks, chains, upgrades)', screen => {
+            screen.close()
+            openMachinesDemo()
+        })
+        .button('Combat Demo (boss bar, statuses, cooldowns, combat log)', screen => {
+            screen.close()
+            openCombatDemo()
+        })
+        .button('Dungeon Demo (loot preview, rooms/locks, custom loot, leaderboard)', screen => {
+            screen.close()
+            openDungeonDemo()
+        })
+        .button('Guild Demo (roles, chat, territory, XP, badge, scheduled events)', screen => {
+            screen.close()
+            openGuildDemo()
+        })
+        .button('Social Demo (party, friends, chat channels, emote wheel, block list)', screen => {
+            screen.close()
+            openSocialDemo()
+        })
+        .button('Housing Demo (claims, permissions, homes, decoration preview)', screen => {
+            screen.close()
+            openHousingDemo()
+        })
+        .button('Settings Hub Demo (sections, search, conflicts, profiles)', screen => {
+            screen.close()
+            openSettingsHub('')
+        })
         .label('editorNote', 'In-game script editor: run /kubeui editor to browse/create/edit/delete files in kubejs/client_scripts.')
         .label('recipeDesignerNote', 'Define custom recipes in-game: run /kubeui recipe-designer, pick a kind, then craft in the real grid GUI and left-click the result to save.')
         .label('traderDesignerNote', 'Build a custom trader in-game: run /kubeui trader-designer, add trades and set AI/movement, then give yourself the egg and right-click a block to spawn it.')

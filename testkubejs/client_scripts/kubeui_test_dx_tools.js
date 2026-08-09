@@ -1,4 +1,4 @@
-// Demo for the DX tooling added in Phases 191-199: .when()/.repeat() builder helpers,
+// Demo for the DX tooling: .when()/.repeat() builder helpers,
 // KubeUI.describe()/.lint()/.toJson()/.fromJson(), and screen.dumpTree() - open the console to see
 // the printed output from each button.
 

@@ -1,11 +1,13 @@
 // Server-authoritative backend for the shop's "validated" purchase button (see
 // kubeui_test_shop.js). This is the real point of KubeUIActions: the client sends only an item
 // id, never a price - the server looks up the real price itself (SHOP_PRICES below) and decides
-// whether the purchase is allowed. A client sending a fake/edited price wouldn't matter, because
-// the server never reads one.
+// whether the purchase is allowed. Balances go through the real, disk-persisted KubeUICurrency
+// "gold" ledger (KubeUIActions.pay/.charge/.balance) - the same virtual currency every other
+// KubeUI shop uses, not a throwaway in-memory map that resets on server restart. Fund your
+// balance for testing via /money deposit <player> <amount> gold (needs OP) or the Economy Demo's
+// "Earn 20 gold" button.
 
-const SERVER_GOLD = {} // playerId -> gold. In-memory for this demo; a real shop would persist this.
-const STARTING_GOLD = 35
+KubeUIActions.registerCurrency('gold')
 
 const SHOP_PRICES = {
     'minecraft:apple': 2,
@@ -18,14 +20,6 @@ const SHOP_PRICES = {
     'minecraft:totem_of_undying': 100,
 }
 
-function getGold(player) {
-    let id = player.uuid
-    if (!(id in SERVER_GOLD)) {
-        SERVER_GOLD[id] = STARTING_GOLD
-    }
-    return SERVER_GOLD[id]
-}
-
 KubeUIActions.register('kubeui_shop:buy_validated', (player, data) => {
     let itemId = data.getStringOr('item', '')
     let price = SHOP_PRICES[itemId]
@@ -35,14 +29,11 @@ KubeUIActions.register('kubeui_shop:buy_validated', (player, data) => {
         return
     }
 
-    let gold = getGold(player)
-
-    if (gold < price) {
-        player.tell('§c[Server-validated] Not enough gold for ' + itemId + ' - you have ' + gold + ', need ' + price + '.')
+    if (!KubeUIActions.charge(player, 'gold', price)) {
+        player.tell('§c[Server-validated] Not enough gold for ' + itemId + ' - you have ' + KubeUIActions.balance(player, 'gold') + ', need ' + price + '.')
         return
     }
 
-    SERVER_GOLD[player.uuid] = gold - price
     player.give(itemId)
-    player.tell('§a[Server-validated] Bought ' + itemId + ' for ' + price + ' gold. You have ' + (gold - price) + ' left.')
+    player.tell('§a[Server-validated] Bought ' + itemId + ' for ' + price + ' gold. You have ' + KubeUIActions.balance(player, 'gold') + ' left.')
 })

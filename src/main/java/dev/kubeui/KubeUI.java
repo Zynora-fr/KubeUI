@@ -1,5 +1,7 @@
 package dev.kubeui;
 
+import dev.kubeui.gui.KubeUIBlockEntities;
+import dev.kubeui.gui.KubeUIBlocks;
 import dev.kubeui.gui.KubeUIConfig;
 import dev.kubeui.gui.KubeUIItems;
 import dev.kubeui.gui.KubeUIMenus;
@@ -17,6 +19,8 @@ public class KubeUI {
 	public KubeUI(IEventBus modEventBus, ModContainer modContainer) {
 		LOGGER.info("KubeUI loaded - GUI bindings are provided to KubeJS scripts via KubeUIPlugin");
 		KubeUIConfig.register(modContainer);
+		KubeUIBlocks.register(modEventBus);
+		KubeUIBlockEntities.register(modEventBus);
 		KubeUIMenus.register(modEventBus);
 		KubeUIItems.register(modEventBus);
 	}
