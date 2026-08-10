@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+
+Fixes for the NeoForge 1.21.1 release:
+
+- Fixed the machine block rendering so a placed machine displays its texture normally instead of
+  appearing transparent.
+- Added a regression test to keep the machine block rendering behavior covered.
+
 ## 0.4.0-1.21.1
 
 Port of 0.4.0 to NeoForge 1.21.1 (KubeJS 2101.7.2-build.368) - full feature parity with the main
