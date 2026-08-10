@@ -62,7 +62,7 @@ public final class KubeUIMachineBlock extends BaseEntityBlock {
 
 	@Override
 	protected RenderShape getRenderShape(BlockState state) {
-		return RenderShape.MODEL;
+		return KubeUIBlockRenderSupport.useModelRenderShape() ? RenderShape.MODEL : RenderShape.INVISIBLE;
 	}
 
 	@Override
